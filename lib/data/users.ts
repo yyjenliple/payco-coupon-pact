@@ -47,7 +47,7 @@ async function assertEmpNoFree(db: Db, empNo: string, exceptId?: number): Promis
   if (clash.length > 0) throw new DomainError("CONFLICT", "이미 쓰고 있는 사번이에요");
 }
 
-const escapeLike = (q: string) => q.replace(/[\%_]/g, (c) => `\${c}`);
+const escapeLike = (q: string) => q.replace(/[\\%_]/g, (c) => `\\${c}`);
 
 function matches(q: string | undefined) {
   const term = q?.trim();

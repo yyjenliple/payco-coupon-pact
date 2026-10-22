@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowRight, ChevronDown, ChevronRight, ChevronUp, ChevronsDownUp, ChevronsUpDown, LoaderCircle, Lock, StickyNote, Undo2 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { saveMemoAction, withdrawAction } from "@/app/actions/common";
 import { Avatar } from "@/components/Avatar";
 import { Button } from "@/components/Button";
@@ -17,20 +17,34 @@ import { OnlyMeToggle } from "./HistoryFilters";
 
 const COLLAPSE_KEY = "history.memos.collapsed";
 
+const COLLAPSE_EVENT = "history-memos-collapsed";
+let collapsedFallback = false;
+
 function readCollapsed(): boolean {
   try {
     return localStorage.getItem(COLLAPSE_KEY) === "1";
   } catch {
-    return false;
+    return collapsedFallback;
   }
 }
 
 function writeCollapsed(value: boolean) {
+  collapsedFallback = value;
   try {
     localStorage.setItem(COLLAPSE_KEY, value ? "1" : "0");
   } catch {
-    // storage unavailable (private mode): the toggle still works for this visit
+    // storage unavailable (private mode): the in-memory fallback keeps the toggle working for this visit
   }
+  window.dispatchEvent(new Event(COLLAPSE_EVENT));
+}
+
+function subscribeCollapsed(onChange: () => void) {
+  window.addEventListener(COLLAPSE_EVENT, onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    window.removeEventListener(COLLAPSE_EVENT, onChange);
+    window.removeEventListener("storage", onChange);
+  };
 }
 
 type Me = { id: number; name: string };
@@ -263,6 +277,12 @@ function DesktopMemoEditor({ item, onClose, onSaved }: { item: WireItem; onClose
   );
 }
 
+/** A page that arrives after a refresh may overlap rows we already show. */
+function appendUnique<T extends { id: number }>(prev: T[], next: T[]): T[] {
+  const seen = new Set(prev.map((i) => i.id));
+  return [...prev, ...next.filter((i) => !seen.has(i.id))];
+}
+
 export function HistoryList({
   me,
   filter,
@@ -282,7 +302,7 @@ export function HistoryList({
   const [extended, setExtended] = useState(explicitPeriod);
   const [done, setDone] = useState(explicitPeriod && initialCursor === null);
   const [loading, setLoading] = useState(false);
-  const [collapsedAll, setCollapsedAll] = useState(false);
+  const collapsedAll = useSyncExternalStore(subscribeCollapsed, readCollapsed, () => false);
   const [overrides, setOverrides] = useState<Map<number, boolean>>(new Map());
   const [sheetItem, setSheetItem] = useState<WireItem | null>(null);
   const [memoItem, setMemoItem] = useState<WireItem | null>(null);
@@ -290,22 +310,20 @@ export function HistoryList({
   const [withdrawing, startWithdraw] = useTransition();
   const sentinel = useRef<HTMLDivElement>(null);
 
-  useEffect(() => setCollapsedAll(readCollapsed()), []);
-
   const loadMore = useCallback(async () => {
     if (loading || done) return;
     setLoading(true);
     try {
       if (cursor) {
         const page = await loadHistoryPage(extended && !explicitPeriod ? { ...filter, from: undefined } : filter, cursor);
-        setItems((prev) => [...prev, ...page.items]);
+        setItems((prev) => appendUnique(prev, page.items));
         setCursor(page.nextCursor);
         if (!page.nextCursor && extended) setDone(true);
       } else if (!extended) {
         // recent month is exhausted: keep going into older records
         const last = items[items.length - 1];
         const page = await loadHistoryPage({ ...filter, from: undefined }, last ? { givenAt: last.givenAt, id: last.id } : null);
-        setItems((prev) => [...prev, ...page.items]);
+        setItems((prev) => appendUnique(prev, page.items));
         setCursor(page.nextCursor);
         setExtended(true);
         if (!page.nextCursor) setDone(true);
@@ -329,10 +347,8 @@ export function HistoryList({
 
   const memoOpen = (id: number) => overrides.get(id) ?? !collapsedAll;
   const toggleAll = () => {
-    const next = !collapsedAll;
-    setCollapsedAll(next);
     setOverrides(new Map());
-    writeCollapsed(next);
+    writeCollapsed(!collapsedAll);
   };
   const updateItem = (id: number, patch: Partial<WireItem>) =>
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)));

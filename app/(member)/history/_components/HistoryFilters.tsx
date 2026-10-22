@@ -175,7 +175,19 @@ function PeriodSheet({
   );
 }
 
-export function HistoryFilters({ people, defaultFrom, today }: { people: FilterPerson[]; defaultFrom: string; today: string }) {
+export function HistoryFilters({
+  people,
+  defaultFrom,
+  today,
+  placeholder = "이름, 사번, 내 메모 검색",
+  showOnlyMe = true,
+}: {
+  people: FilterPerson[];
+  defaultFrom: string;
+  today: string;
+  placeholder?: string;
+  showOnlyMe?: boolean;
+}) {
   const { params, set } = useParamsUpdater();
   const [query, setQuery] = useState(params.get("q") ?? "");
   const [open, setOpen] = useState<"period" | "giver" | "receiver" | null>(null);
@@ -201,8 +213,8 @@ export function HistoryFilters({ people, defaultFrom, today }: { people: FilterP
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="이름, 사번, 내 메모 검색"
-          aria-label="이름, 사번, 내 메모 검색"
+          placeholder={placeholder}
+          aria-label={placeholder}
           className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-sub md:text-sm"
         />
       </label>
@@ -218,9 +230,11 @@ export function HistoryFilters({ people, defaultFrom, today }: { people: FilterP
         <Chip label="받은 사람" value={receiver?.name} active={!!receiver} onClick={() => setOpen("receiver")} />
       </div>
       <span className="hidden flex-1 md:block" />
-      <span className="hidden md:block">
-        <OnlyMeToggle variant="checkbox" />
-      </span>
+      {showOnlyMe && (
+        <span className="hidden md:block">
+          <OnlyMeToggle variant="checkbox" />
+        </span>
+      )}
 
       <PeriodSheet
         key={`${from}-${to}-${open === "period"}`}

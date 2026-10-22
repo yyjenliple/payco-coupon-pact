@@ -164,7 +164,7 @@ const toPerson = (p: PersonRow): PersonRef => ({
   deleted: p.deletedAt !== null,
 });
 
-const escapeLike = (q: string) => q.replace(/[\%_]/g, (c) => `\${c}`);
+const escapeLike = (q: string) => q.replace(/[\\%_]/g, (c) => `\\${c}`);
 
 function baseConditions(filter: HistoryFilter, cursor: Cursor | null): (SQL | undefined)[] {
   return [

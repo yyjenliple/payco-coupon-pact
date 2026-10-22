@@ -45,3 +45,16 @@ export function initialsOf(name: string): string {
 export function avatarColorOf(id: number): string {
   return AVATAR_COLORS[((id % AVATAR_COLORS.length) + AVATAR_COLORS.length) % AVATAR_COLORS.length];
 }
+
+/** "YYYY-MM-DDTHH:MM" (datetime-local, read as KST) → instant; null if malformed. */
+export function parseKstLocal(value: string): Date | null {
+  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+  if (!m) return null;
+  const [, y, mo, d, h, mi] = m.map(Number);
+  return new Date(kstMidnight(y, mo - 1, d).getTime() + (h * 60 + mi) * 60000);
+}
+
+/** Instant → "YYYY-MM-DDTHH:MM" in KST, for datetime-local inputs. */
+export function toKstLocal(d: Date): string {
+  return formatKst(d).replace(" ", "T");
+}
