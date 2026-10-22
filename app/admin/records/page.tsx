@@ -40,7 +40,10 @@ async function RecordsContent({ searchParams }: { searchParams: PageProps<"/admi
       explicitPeriod={explicitPeriod}
       initialItems={page.items.map((i) => ({ ...i, givenAt: i.givenAt.getTime() }))}
       initialCursor={page.nextCursor}
-      options={members.map(({ id, name, empNo }) => ({ id, name, empNo }))}
+      options={[
+        ...members.map(({ id, name, empNo }) => ({ id, name, empNo, deleted: false })),
+        ...[...people.values()].filter((p) => p.deleted).map(({ id, name, empNo }) => ({ id, name, empNo, deleted: true })),
+      ]}
       filters={
         <HistoryFilters
           people={filterPeople}

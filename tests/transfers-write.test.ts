@@ -44,6 +44,19 @@ describe("giveCoupon", () => {
   });
 });
 
+describe("input hardening", () => {
+  test("a receiver id sent as my own id in string form is rejected", async () => {
+    await expect(giveCoupon(db, haneul, String(haneul) as unknown as number)).rejects.toMatchObject({ code: "INVALID" });
+    expect(await db.select().from(transfers)).toHaveLength(0);
+  });
+
+  test("the database refuses a transfer to oneself", async () => {
+    await expect(
+      db.insert(transfers).values({ giverId: haneul, receiverId: haneul, givenAt: new Date(), createdBy: haneul }),
+    ).rejects.toThrow();
+  });
+});
+
 describe("withdrawTransfer", () => {
   test("giver or receiver can withdraw and withdrawnBy is recorded", async () => {
     const t1 = await giveCoupon(db, haneul, junho);
@@ -80,6 +93,21 @@ describe("admin transfer management", () => {
     await adminUpdateTransfer(db, admin, t, { giverId: seoyeon, receiverId: junho, givenAt });
     expect(await get(t)).toMatchObject({ giverId: seoyeon, givenAt, editedBy: admin });
     expect((await get(t)).editedAt).toBeInstanceOf(Date);
+  });
+
+  test("admin can change the date of a record whose party was deleted", async () => {
+    const t = await giveCoupon(db, haneul, junho);
+    await deleteMember(db, junho);
+    const givenAt = new Date("2026-10-01T03:00:00Z");
+    await adminUpdateTransfer(db, admin, t, { giverId: haneul, receiverId: junho, givenAt });
+    expect((await get(t)).givenAt).toEqual(givenAt);
+  });
+
+  test("admin cannot newly assign a deleted member to a record", async () => {
+    const t = await giveCoupon(db, haneul, junho);
+    await deleteMember(db, seoyeon);
+    const input = { giverId: haneul, receiverId: seoyeon, givenAt: new Date("2026-10-01T03:00:00Z") };
+    await expect(adminUpdateTransfer(db, admin, t, input)).rejects.toMatchObject({ code: "INVALID" });
   });
 
   test("admin can delete a transfer", async () => {

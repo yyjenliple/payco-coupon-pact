@@ -1,0 +1,1 @@
+ALTER TABLE "transfers" ADD CONSTRAINT "transfers_not_self" CHECK ("transfers"."giver_id" <> "transfers"."receiver_id");

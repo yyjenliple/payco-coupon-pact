@@ -20,7 +20,7 @@ import {
   type WireRecord,
 } from "../actions";
 
-type Option = { id: number; name: string; empNo: string };
+type Option = { id: number; name: string; empNo: string; deleted: boolean };
 
 function Tag({ children, tone }: { children: React.ReactNode; tone: "gray" | "amber" }) {
   return (
@@ -48,11 +48,13 @@ function PersonSelect({ id, label, value, options, onChange, compact }: { id: st
       <option value="" disabled>
         선택
       </option>
-      {options.map((o) => (
-        <option key={o.id} value={o.id}>
-          {o.name} ({o.empNo})
-        </option>
-      ))}
+      {options
+        .filter((o) => !o.deleted || o.id === value)
+        .map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.name} ({o.empNo}{o.deleted ? ", 삭제됨" : ""})
+          </option>
+        ))}
     </select>
   );
 }

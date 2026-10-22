@@ -4,6 +4,7 @@ import type { Db } from "@/lib/db/client";
 import { users } from "@/lib/db/schema";
 import type { PersonRef } from "@/lib/domain/balance";
 import { DomainError } from "@/lib/errors";
+import { toId } from "@/lib/ids";
 
 export const INITIAL_PASSWORD = "0000";
 export const MIN_PASSWORD_LENGTH = 4;
@@ -108,7 +109,7 @@ export async function createMember(db: Db, input: { name: string; empNo: string 
 }
 
 async function getActiveMember(db: Db, id: number) {
-  const [user] = await db.select().from(users).where(and(eq(users.id, id), isNull(users.deletedAt)));
+  const [user] = await db.select().from(users).where(and(eq(users.id, toId(id)), isNull(users.deletedAt)));
   if (!user) throw new DomainError("NOT_FOUND", "회원을 찾을 수 없어요");
   return user;
 }

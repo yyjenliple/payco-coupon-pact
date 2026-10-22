@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   index,
   integer,
   pgTable,
@@ -42,7 +43,10 @@ export const transfers = pgTable(
     editedBy: integer("edited_by").references(() => users.id),
     createdAt: ts("created_at").notNull().defaultNow(),
   },
-  (t) => [index("transfers_given_at_id").on(t.givenAt.desc(), t.id.desc())],
+  (t) => [
+    index("transfers_given_at_id").on(t.givenAt.desc(), t.id.desc()),
+    check("transfers_not_self", sql`${t.giverId} <> ${t.receiverId}`),
+  ],
 );
 
 export const memos = pgTable(
