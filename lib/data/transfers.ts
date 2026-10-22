@@ -1,6 +1,8 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, isNull, lt, lte, or, type SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "@/lib/db/client";
-import { transfers, users } from "@/lib/db/schema";
+import { memos, transfers, users } from "@/lib/db/schema";
+import type { Edge, PersonRef } from "@/lib/domain/balance";
 import { DomainError } from "@/lib/errors";
 
 type TransferInput = { giverId: number; receiverId: number; givenAt: Date };
@@ -93,4 +95,200 @@ export async function adminDeleteTransfer(db: Db, adminId: number, transferId: n
   await requireAdminUser(db, adminId);
   await getTransfer(db, transferId);
   await db.delete(transfers).where(eq(transfers.id, transferId));
+}
+
+// ---------- reads ----------
+
+export type HistoryFilter = {
+  from?: Date;
+  to?: Date;
+  giverId?: number;
+  receiverId?: number;
+  onlyMe?: boolean;
+  q?: string;
+};
+
+export type Cursor = { givenAt: number; id: number };
+
+export type HistoryItem = {
+  id: number;
+  giver: PersonRef;
+  receiver: PersonRef;
+  givenAt: Date;
+  withdrawnBy: PersonRef | null;
+  edited: boolean;
+  myMemo: string | null;
+};
+
+export type HistoryPage<T> = { items: T[]; nextCursor: Cursor | null };
+
+export async function allEdges(db: Db): Promise<Edge[]> {
+  const rows = await db
+    .select({ giverId: transfers.giverId, receiverId: transfers.receiverId, withdrawnAt: transfers.withdrawnAt })
+    .from(transfers);
+  return rows.map((r) => ({ giverId: r.giverId, receiverId: r.receiverId, withdrawn: r.withdrawnAt !== null }));
+}
+
+const giver = alias(users, "giver");
+const receiver = alias(users, "receiver");
+const withdrawer = alias(users, "withdrawer");
+
+const giverCols = {
+  id: giver.id,
+  name: giver.name,
+  empNo: giver.empNo,
+  avatarPath: giver.avatarPath,
+  deletedAt: giver.deletedAt,
+};
+const receiverCols = {
+  id: receiver.id,
+  name: receiver.name,
+  empNo: receiver.empNo,
+  avatarPath: receiver.avatarPath,
+  deletedAt: receiver.deletedAt,
+};
+const withdrawerCols = {
+  id: withdrawer.id,
+  name: withdrawer.name,
+  empNo: withdrawer.empNo,
+  avatarPath: withdrawer.avatarPath,
+  deletedAt: withdrawer.deletedAt,
+};
+
+type PersonRow = { id: number; name: string; empNo: string; avatarPath: string | null; deletedAt: Date | null };
+const toPerson = (p: PersonRow): PersonRef => ({
+  id: p.id,
+  name: p.name,
+  empNo: p.empNo,
+  avatarPath: p.avatarPath,
+  deleted: p.deletedAt !== null,
+});
+
+const escapeLike = (q: string) => q.replace(/[\%_]/g, (c) => `\${c}`);
+
+function baseConditions(filter: HistoryFilter, cursor: Cursor | null): (SQL | undefined)[] {
+  return [
+    filter.from ? gte(transfers.givenAt, filter.from) : undefined,
+    filter.to ? lte(transfers.givenAt, filter.to) : undefined,
+    filter.giverId ? eq(transfers.giverId, filter.giverId) : undefined,
+    filter.receiverId ? eq(transfers.receiverId, filter.receiverId) : undefined,
+    cursor
+      ? or(
+          lt(transfers.givenAt, new Date(cursor.givenAt)),
+          and(eq(transfers.givenAt, new Date(cursor.givenAt)), lt(transfers.id, cursor.id)),
+        )
+      : undefined,
+  ];
+}
+
+function nameMatches(term: string): SQL | undefined {
+  const pattern = `%${escapeLike(term)}%`;
+  return or(
+    ilike(giver.name, pattern),
+    ilike(giver.empNo, pattern),
+    ilike(receiver.name, pattern),
+    ilike(receiver.empNo, pattern),
+  );
+}
+
+function pageOf<T extends { id: number; givenAt: Date }>(rows: T[], limit: number): HistoryPage<T> {
+  const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
+  const last = items[items.length - 1];
+  return { items, nextCursor: hasMore && last ? { givenAt: last.givenAt.getTime(), id: last.id } : null };
+}
+
+/**
+ * Member history. Memos are joined only for the viewer, so neither the returned memo
+ * nor the text search can ever see another user's memo.
+ */
+export async function listHistory(
+  db: Db,
+  viewerId: number,
+  filter: HistoryFilter,
+  cursor: Cursor | null,
+  limit = 30,
+): Promise<HistoryPage<HistoryItem>> {
+  const term = filter.q?.trim();
+  const rows = await db
+    .select({
+      id: transfers.id,
+      givenAt: transfers.givenAt,
+      editedAt: transfers.editedAt,
+      giver: giverCols,
+      receiver: receiverCols,
+      withdrawer: withdrawerCols,
+      memo: memos.body,
+    })
+    .from(transfers)
+    .innerJoin(giver, eq(giver.id, transfers.giverId))
+    .innerJoin(receiver, eq(receiver.id, transfers.receiverId))
+    .leftJoin(withdrawer, eq(withdrawer.id, transfers.withdrawnBy))
+    .leftJoin(memos, and(eq(memos.transferId, transfers.id), eq(memos.userId, viewerId)))
+    .where(
+      and(
+        ...baseConditions(filter, cursor),
+        filter.onlyMe ? or(eq(transfers.giverId, viewerId), eq(transfers.receiverId, viewerId)) : undefined,
+        term ? or(nameMatches(term), ilike(memos.body, `%${escapeLike(term)}%`)) : undefined,
+      ),
+    )
+    .orderBy(desc(transfers.givenAt), desc(transfers.id))
+    .limit(limit + 1);
+
+  const page = pageOf(rows, limit);
+  return {
+    nextCursor: page.nextCursor,
+    items: page.items.map((r) => ({
+      id: r.id,
+      giver: toPerson(r.giver),
+      receiver: toPerson(r.receiver),
+      givenAt: r.givenAt,
+      withdrawnBy: r.withdrawer ? toPerson(r.withdrawer) : null,
+      edited: r.editedAt !== null,
+      myMemo: r.memo ?? null,
+    })),
+  };
+}
+
+export type AdminRecord = Omit<HistoryItem, "myMemo">;
+
+/** Admin record list. Never joins memos. */
+export async function listAdminRecords(
+  db: Db,
+  adminId: number,
+  filter: Omit<HistoryFilter, "onlyMe">,
+  cursor: Cursor | null,
+  limit = 30,
+): Promise<HistoryPage<AdminRecord>> {
+  await requireAdminUser(db, adminId);
+  const term = filter.q?.trim();
+  const rows = await db
+    .select({
+      id: transfers.id,
+      givenAt: transfers.givenAt,
+      editedAt: transfers.editedAt,
+      giver: giverCols,
+      receiver: receiverCols,
+      withdrawer: withdrawerCols,
+    })
+    .from(transfers)
+    .innerJoin(giver, eq(giver.id, transfers.giverId))
+    .innerJoin(receiver, eq(receiver.id, transfers.receiverId))
+    .leftJoin(withdrawer, eq(withdrawer.id, transfers.withdrawnBy))
+    .where(and(...baseConditions(filter, cursor), term ? nameMatches(term) : undefined))
+    .orderBy(desc(transfers.givenAt), desc(transfers.id))
+    .limit(limit + 1);
+
+  const page = pageOf(rows, limit);
+  return {
+    nextCursor: page.nextCursor,
+    items: page.items.map((r) => ({
+      id: r.id,
+      giver: toPerson(r.giver),
+      receiver: toPerson(r.receiver),
+      givenAt: r.givenAt,
+      withdrawnBy: r.withdrawer ? toPerson(r.withdrawer) : null,
+      edited: r.editedAt !== null,
+    })),
+  };
 }
