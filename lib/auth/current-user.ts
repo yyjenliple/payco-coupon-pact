@@ -16,7 +16,7 @@ export type CurrentUser = {
 };
 
 export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
-  const { userId } = await readSession();
+  const { userId, iat } = await readSession();
   if (!userId) return null;
   const db = await getDb();
   const [user] = await db
@@ -27,10 +27,21 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
       isAdmin: users.isAdmin,
       avatarPath: users.avatarPath,
       passwordChanged: users.passwordChanged,
+      passwordChangedAt: users.passwordChangedAt,
     })
     .from(users)
     .where(and(eq(users.id, userId), isNull(users.deletedAt)));
-  return user ?? null;
+  if (!user) return null;
+  // a password change signs out every session issued before it
+  if (user.passwordChangedAt && (iat ?? 0) < user.passwordChangedAt.getTime()) return null;
+  return {
+    id: user.id,
+    name: user.name,
+    empNo: user.empNo,
+    isAdmin: user.isAdmin,
+    avatarPath: user.avatarPath,
+    passwordChanged: user.passwordChanged,
+  };
 });
 
 /** Signed-in, non-admin member. Admins are sent to /admin. */

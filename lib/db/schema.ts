@@ -22,6 +22,8 @@ export const users = pgTable(
     passwordHash: text("password_hash").notNull(),
     isAdmin: boolean("is_admin").notNull().default(false),
     passwordChanged: boolean("password_changed").notNull().default(false),
+    /** Sessions issued before this instant are no longer accepted. */
+    passwordChangedAt: ts("password_changed_at"),
     avatarPath: text("avatar_path"),
     deletedAt: ts("deleted_at"),
     createdAt: ts("created_at").notNull().defaultNow(),

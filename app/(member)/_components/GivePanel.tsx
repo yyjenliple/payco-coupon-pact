@@ -14,14 +14,21 @@ export type GiveTarget = { id: number; name: string; empNo: string; avatarPath: 
 function useGive() {
   const toast = useToast();
   const [pending, start] = useTransition();
-  const [given, setGiven] = useState<Set<number>>(new Set());
+  // person id → transfers given during this visit, so "쐈어요" only shows while one still stands
+  const [givenTo, setGivenTo] = useState<Map<number, number[]>>(new Map());
   const [memoFor, setMemoFor] = useState<number | null>(null);
+  const given = new Set([...givenTo].filter(([, ids]) => ids.length > 0).map(([id]) => id));
+  const track = (personId: number, transferId: number, add: boolean) =>
+    setGivenTo((prev) => {
+      const ids = prev.get(personId) ?? [];
+      return new Map(prev).set(personId, add ? [...ids, transferId] : ids.filter((id) => id !== transferId));
+    });
 
   const give = (target: GiveTarget) =>
     start(async () => {
       const result = await giveCouponAction(target.id);
       if (!result.ok) return toast.show({ message: result.error });
-      setGiven((prev) => new Set(prev).add(target.id));
+      track(target.id, result.transferId, true);
       toast.show({
         message: `${target.name}님에게 식권 1장 쐈어요`,
         actions: [
@@ -30,11 +37,7 @@ function useGive() {
             label: "되돌리기",
             onClick: async () => {
               const undo = await withdrawAction(result.transferId);
-              setGiven((prev) => {
-                const next = new Set(prev);
-                next.delete(target.id);
-                return next;
-              });
+              if (undo.ok) track(target.id, result.transferId, false);
               toast.show({ message: undo.ok ? "되돌렸어요" : undo.error });
             },
           },

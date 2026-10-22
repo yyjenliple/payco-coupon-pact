@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-
-const SESSION_COOKIE = "coupon_session";
+import { SESSION_COOKIE } from "@/lib/auth/cookie";
 
 // Optimistic check only: the real session validation happens in lib/auth/current-user.ts.
 export function proxy(request: NextRequest) {

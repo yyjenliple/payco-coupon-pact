@@ -143,7 +143,7 @@ function Row({
           </span>
         </button>
         {item.myMemo && <MemoToggle open={memoOpen} onClick={onToggleMemo} />}
-        {mine && !withdrawn && <ChevronRight size={18} className="shrink-0 text-faint" aria-hidden />}
+        {mine && <ChevronRight size={18} className="shrink-0 text-faint" aria-hidden />}
       </div>
 
       {/* desktop */}

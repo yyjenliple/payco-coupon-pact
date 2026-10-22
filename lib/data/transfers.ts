@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, ilike, isNull, lt, lte, or, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, isNull, lt, lte, notInArray, or, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "@/lib/db/client";
 import { memos, transfers, users } from "@/lib/db/schema";
@@ -107,6 +107,10 @@ export async function adminUpdateTransfer(
     .update(transfers)
     .set({ ...valid, editedAt: now, editedBy: adminId })
     .where(eq(transfers.id, transferId));
+  // someone taken off the record could no longer edit or clear their private memo on it
+  await db
+    .delete(memos)
+    .where(and(eq(memos.transferId, transferId), notInArray(memos.userId, [valid.giverId, valid.receiverId])));
 }
 
 export async function adminDeleteTransfer(db: Db, adminId: number, transferId: number): Promise<void> {
@@ -126,6 +130,10 @@ export type HistoryFilter = {
   q?: string;
 };
 
+/**
+ * givenAt is epoch milliseconds. given_at is always written from a JS Date (ms precision),
+ * so comparing at ms precision is exact; a write using SQL now() (µs) would break paging.
+ */
 export type Cursor = { givenAt: number; id: number };
 
 export type HistoryItem = {

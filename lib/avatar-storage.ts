@@ -1,5 +1,5 @@
 import "server-only";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
@@ -62,6 +62,22 @@ export async function saveAvatar(userId: number, file: File): Promise<string> {
   await mkdir(LOCAL_DIR, { recursive: true });
   await writeFile(path.join(LOCAL_DIR, name), bytes);
   return name;
+}
+
+/** Best-effort removal of a replaced photo; a leftover file is harmless, a failed upload is not. */
+export async function deleteAvatar(name: string | null): Promise<void> {
+  if (!name || !AVATAR_NAME.test(name)) return;
+  try {
+    const remote = storage();
+    if (remote) {
+      await remote.ready;
+      await remote.client.storage.from(BUCKET).remove([name]);
+    } else {
+      await rm(path.join(LOCAL_DIR, name), { force: true });
+    }
+  } catch (error) {
+    console.warn("old avatar not removed:", name, error);
+  }
 }
 
 /** Where /avatars/[file] should send the browser: a Supabase public URL or the local bytes. */

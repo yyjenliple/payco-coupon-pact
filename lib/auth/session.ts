@@ -2,11 +2,12 @@ import "server-only";
 import { sealData, unsealData } from "iron-session";
 import { cookies } from "next/headers";
 import { connection } from "next/server";
+import { SESSION_COOKIE } from "./cookie";
 
-export const SESSION_COOKIE = "coupon_session";
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
-export type SessionData = { userId?: number };
+/** iat: when the session was issued (epoch ms); sessions older than a password change are rejected. */
+export type SessionData = { userId?: number; iat?: number };
 
 function password(): string {
   const value = process.env.SESSION_PASSWORD;
@@ -36,8 +37,8 @@ export async function readSession(): Promise<SessionData> {
   return unsealSession(seal, password());
 }
 
-export async function writeSession(userId: number): Promise<void> {
-  (await cookies()).set(SESSION_COOKIE, await sealSession({ userId }, password()), {
+export async function writeSession(userId: number, issuedAt = Date.now()): Promise<void> {
+  (await cookies()).set(SESSION_COOKIE, await sealSession({ userId, iat: issuedAt }, password()), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",

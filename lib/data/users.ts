@@ -7,6 +7,8 @@ import { DomainError } from "@/lib/errors";
 import { toId } from "@/lib/ids";
 
 export const INITIAL_PASSWORD = "0000";
+/** Compared against when the 사번 doesn't exist, so a miss costs as much as a wrong password. */
+const DUMMY_HASH = "$2b$10$//FOTwoduJeEx52MKipQOelmvJEO/qKAwp4BzE3VG3tJ8d/utW3c.";
 export const MIN_PASSWORD_LENGTH = 4;
 
 export type Member = {
@@ -39,6 +41,23 @@ function cleanEmpNo(empNo: string): string {
   return trimmed;
 }
 
+/** Two admins adding the same 사번 at once can both pass assertEmpNoFree; the partial unique index catches the loser. */
+function isUniqueViolation(error: unknown): boolean {
+  for (let e = error as { code?: string; cause?: unknown } | undefined; e; e = e.cause as typeof e) {
+    if (e.code === "23505") return true;
+  }
+  return false;
+}
+
+async function writeOrConflict<T>(write: () => Promise<T>): Promise<T> {
+  try {
+    return await write();
+  } catch (error) {
+    if (isUniqueViolation(error)) throw new DomainError("CONFLICT", "이미 쓰고 있는 사번이에요");
+    throw error;
+  }
+}
+
 async function assertEmpNoFree(db: Db, empNo: string, exceptId?: number): Promise<void> {
   if (empNo.toLowerCase() === "admin") throw new DomainError("CONFLICT", "이미 쓰고 있는 사번이에요");
   const clash = await db
@@ -66,7 +85,10 @@ export async function authenticate(
     .select({ id: users.id, isAdmin: users.isAdmin, passwordHash: users.passwordHash })
     .from(users)
     .where(and(eq(users.empNo, loginId.trim()), isNull(users.deletedAt)));
-  if (!user) return null;
+  if (!user) {
+    await verifyPassword(password, DUMMY_HASH);
+    return null;
+  }
   if (!(await verifyPassword(password, user.passwordHash))) return null;
   return { id: user.id, isAdmin: user.isAdmin };
 }
@@ -101,10 +123,10 @@ export async function createMember(db: Db, input: { name: string; empNo: string 
   const name = cleanName(input.name);
   const empNo = cleanEmpNo(input.empNo);
   await assertEmpNoFree(db, empNo);
-  const [row] = await db
-    .insert(users)
-    .values({ name, empNo, passwordHash: await hashPassword(INITIAL_PASSWORD), passwordChanged: false })
-    .returning({ id: users.id });
+  const passwordHash = await hashPassword(INITIAL_PASSWORD);
+  const [row] = await writeOrConflict(() =>
+    db.insert(users).values({ name, empNo, passwordHash, passwordChanged: false }).returning({ id: users.id }),
+  );
   return row.id;
 }
 
@@ -120,7 +142,7 @@ export async function updateMember(db: Db, id: number, input: { name: string; em
   const name = cleanName(input.name);
   const empNo = cleanEmpNo(input.empNo);
   await assertEmpNoFree(db, empNo, id);
-  await db.update(users).set({ name, empNo }).where(eq(users.id, id));
+  await writeOrConflict(() => db.update(users).set({ name, empNo }).where(eq(users.id, id)));
 }
 
 export async function deleteMember(db: Db, id: number): Promise<void> {
@@ -141,6 +163,7 @@ export async function changeMyPassword(
   db: Db,
   userId: number,
   input: { current: string; next: string; confirm: string },
+  now = new Date(),
 ): Promise<void> {
   const user = await getActiveMember(db, userId);
   if (!(await verifyPassword(input.current, user.passwordHash))) {
@@ -150,6 +173,6 @@ export async function changeMyPassword(
   if (input.next !== input.confirm) throw new DomainError("INVALID", "새 비밀번호와 달라요");
   await db
     .update(users)
-    .set({ passwordHash: await hashPassword(input.next), passwordChanged: true })
+    .set({ passwordHash: await hashPassword(input.next), passwordChanged: true, passwordChangedAt: now })
     .where(eq(users.id, userId));
 }
