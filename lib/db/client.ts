@@ -55,9 +55,13 @@ const globalForDb = globalThis as unknown as { couponDb?: Promise<Db> };
 export function getDb(): Promise<Db> {
   if (!globalForDb.couponDb) {
     const url = process.env.DATABASE_URL;
-    globalForDb.couponDb = url
-      ? createPostgresDb(url)
-      : createPgliteDb(path.join(process.cwd(), "data", "pglite"));
+    globalForDb.couponDb = (
+      url ? createPostgresDb(url) : createPgliteDb(path.join(process.cwd(), "data", "pglite"))
+    ).catch((error: unknown) => {
+      // don't keep a failed connection cached; the next request retries
+      globalForDb.couponDb = undefined;
+      throw error;
+    });
   }
   return globalForDb.couponDb;
 }
