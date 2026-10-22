@@ -1,6 +1,7 @@
 import "server-only";
 import { sealData, unsealData } from "iron-session";
 import { cookies } from "next/headers";
+import { connection } from "next/server";
 
 export const SESSION_COOKIE = "coupon_session";
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
@@ -28,6 +29,8 @@ export async function unsealSession(seal: string, pw: string): Promise<SessionDa
 }
 
 export async function readSession(): Promise<SessionData> {
+  // iron-session checks expiry with Date.now(), which must only run at request time
+  await connection();
   const seal = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!seal) return {};
   return unsealSession(seal, password());
