@@ -34,7 +34,7 @@ export function AdminNav() {
         </nav>
         <span className="flex-1" />
         <span className="hidden font-num text-sm font-semibold md:inline">admin</span>
-        <Link href="/me/password" className="text-[13px] text-sub underline underline-offset-2">
+        <Link href="/account/password" className="text-[13px] text-sub underline underline-offset-2">
           비밀번호 변경
         </Link>
         <form action={logout}>
