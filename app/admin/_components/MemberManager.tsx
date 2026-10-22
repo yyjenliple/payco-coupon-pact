@@ -17,6 +17,7 @@ const EMP_NO_MAX = 12;
 function MemberSheet({ member, open, onClose }: { member: Member | null; open: boolean; onClose: () => void }) {
   const toast = useToast();
   const [name, setName] = useState(member?.name ?? "");
+  const [account, setAccount] = useState(member?.account ?? "");
   const [empNo, setEmpNo] = useState(member?.empNo ?? "");
   const [error, setError] = useState<string>();
   const [pending, start] = useTransition();
@@ -29,7 +30,7 @@ function MemberSheet({ member, open, onClose }: { member: Member | null; open: b
         onSubmit={(e) => {
           e.preventDefault();
           start(async () => {
-            const input = { name, empNo };
+            const input = { name, account, empNo };
             const result = editing ? await updateMemberAction(member.id, input) : await createMemberAction(input);
             if (!result.ok) return setError(result.error);
             onClose();
@@ -41,17 +42,28 @@ function MemberSheet({ member, open, onClose }: { member: Member | null; open: b
           <Field label="이름" htmlFor="member-name">
             <input id="member-name" value={name} maxLength={20} autoFocus onChange={(e) => setName(e.target.value)} className={inputClass} />
           </Field>
-          <Field label="사번" htmlFor="member-empno" error={error}>
+          <Field label="이메일 (로그인 계정)" htmlFor="member-account" error={error}>
+            <input
+              id="member-account"
+              type="email"
+              value={account}
+              placeholder="name@company.com"
+              autoCapitalize="off"
+              aria-invalid={!!error}
+              onChange={(e) => {
+                setAccount(e.target.value);
+                setError(undefined);
+              }}
+              className={`${inputClass} font-num`}
+            />
+          </Field>
+          <Field label="사번 (선택)" htmlFor="member-empno">
             <input
               id="member-empno"
               value={empNo}
               maxLength={EMP_NO_MAX}
               placeholder="사번 입력"
-              aria-invalid={!!error}
-              onChange={(e) => {
-                setEmpNo(e.target.value);
-                setError(undefined);
-              }}
+              onChange={(e) => setEmpNo(e.target.value)}
               className={`${inputClass} font-num`}
             />
           </Field>
@@ -62,7 +74,7 @@ function MemberSheet({ member, open, onClose }: { member: Member | null; open: b
             처음 비밀번호는 0000으로 만들어져요
           </p>
         )}
-        <Button type="submit" disabled={pending || !name.trim() || !empNo.trim()}>
+        <Button type="submit" disabled={pending || !name.trim() || !account.trim()}>
           {editing ? "저장" : "추가"}
         </Button>
       </form>
@@ -73,7 +85,8 @@ function MemberSheet({ member, open, onClose }: { member: Member | null; open: b
 function InlineEditRow({ member, onDone }: { member: Member; onDone: () => void }) {
   const toast = useToast();
   const [name, setName] = useState(member.name);
-  const [empNo, setEmpNo] = useState(member.empNo);
+  const [account, setAccount] = useState(member.account);
+  const [empNo, setEmpNo] = useState(member.empNo ?? "");
   const [pending, start] = useTransition();
   const input = "h-[38px] rounded-lg border border-ink bg-bg px-2.5 text-sm font-medium outline-none";
   return (
@@ -81,11 +94,14 @@ function InlineEditRow({ member, onDone }: { member: Member; onDone: () => void 
       <td className="px-4 py-2.5">
         <span className="flex items-center gap-2.5">
           <Avatar person={member} size={32} />
-          <input aria-label="이름" value={name} maxLength={20} onChange={(e) => setName(e.target.value)} className={`${input} w-[180px]`} />
+          <input aria-label="이름" value={name} maxLength={20} onChange={(e) => setName(e.target.value)} className={`${input} w-40`} />
         </span>
       </td>
       <td>
-        <input aria-label="사번" value={empNo} maxLength={EMP_NO_MAX} onChange={(e) => setEmpNo(e.target.value)} className={`${input} w-[140px] font-num`} />
+        <input aria-label="이메일" type="email" value={account} onChange={(e) => setAccount(e.target.value)} className={`${input} w-60 font-num`} />
+      </td>
+      <td>
+        <input aria-label="사번" value={empNo} maxLength={EMP_NO_MAX} onChange={(e) => setEmpNo(e.target.value)} className={`${input} w-28 font-num`} />
       </td>
       <td className="text-[13px] text-sub">{member.passwordChanged ? "변경함" : "초기 비밀번호"}</td>
       <td className="px-4 text-right">
@@ -95,8 +111,8 @@ function InlineEditRow({ member, onDone }: { member: Member; onDone: () => void 
             disabled={pending}
             onClick={() =>
               start(async () => {
-                const result = await updateMemberAction(member.id, { name, empNo });
-                if (!result.ok) return toast.show({ message: result.error });
+                const result = await updateMemberAction(member.id, { name, account, empNo });
+                if (!result.ok) return toast.show({ message: result.error, tone: "error" });
                 onDone();
                 toast.show({ message: "저장했어요" });
               })
@@ -134,31 +150,31 @@ export function MemberManager({ members, query }: { members: Member[]; query: st
     start(async () => {
       const result = await deleteMemberAction(member.id);
       setDeleting(null);
-      toast.show({ message: result.ok ? `${member.name}님을 삭제했어요` : result.error });
+      toast.show({ message: result.ok ? `${member.name}님을 삭제했어요` : result.error, tone: result.ok ? "success" : "error" });
     });
 
   return (
-    <main className="mx-auto flex max-w-[960px] flex-col gap-5 px-5 pb-10 pt-4 md:gap-6 md:px-0 md:pt-10">
+    <main className="mx-auto flex max-w-260 flex-col gap-5 px-5 pb-10 pt-4 md:gap-6 md:px-10 md:pt-10">
       <div className="flex items-center justify-between gap-3">
         <h1 className="flex items-end gap-2.5">
           <span className="text-[22px] font-bold md:text-[28px]">회원 관리</span>
           <span className="hidden pb-1 text-[15px] text-sub md:inline">{members.length}명</span>
         </h1>
         <div className="flex items-center gap-2.5">
-          <label className="hidden h-[42px] w-[260px] items-center gap-2 rounded-[10px] bg-surface px-3 md:flex">
+          <label className="hidden h-10.5 w-65 items-center gap-2 rounded-[10px] bg-surface px-3 md:flex">
             <Search size={16} className="text-sub" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="이름이나 사번" aria-label="이름이나 사번" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-sub" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="이름, 이메일, 사번" aria-label="이름, 이메일, 사번으로 검색" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-sub" />
           </label>
-          <Button size="md" onClick={() => setSheet({ member: null })} className="h-[38px] pl-2.5 md:h-[42px]">
+          <Button size="md" onClick={() => setSheet({ member: null })} className="h-9.5 pl-2.5 md:h-10.5">
             <Plus size={18} />
             회원 추가
           </Button>
         </div>
       </div>
 
-      <label className="flex h-[46px] items-center gap-2.5 rounded-xl bg-surface px-3.5 md:hidden">
+      <label className="flex h-11.5 items-center gap-2.5 rounded-xl bg-surface px-3.5 md:hidden">
         <Search size={18} className="text-sub" />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="이름이나 사번" aria-label="이름이나 사번" className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-sub" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="이름, 이메일, 사번" aria-label="이름, 이메일, 사번으로 검색" className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-sub" />
       </label>
       <p className="text-[13px] text-sub md:hidden">{members.length}명</p>
 
@@ -172,9 +188,12 @@ export function MemberManager({ members, query }: { members: Member[]; query: st
                 <Avatar person={m} size={40} />
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="text-[15px] font-semibold">{m.name}</span>
-                  <span className="font-num text-[13px] text-sub">{m.empNo}</span>
+                  <span className="truncate font-num text-[13px] text-sub">
+                    {m.account}
+                    {m.empNo && ` · ${m.empNo}`}
+                  </span>
                 </span>
-                {!m.passwordChanged && <span className="rounded-[5px] bg-surface px-[7px] py-0.5 text-[11px] font-semibold text-sub">초기 비밀번호</span>}
+                {!m.passwordChanged && <span className="rounded-[5px] bg-surface px-1.75 py-0.5 text-[11px] font-semibold text-sub">초기 비밀번호</span>}
                 <button type="button" aria-label={`${m.name} 메뉴`} onClick={() => setMenuFor(m)} className="p-1 text-sub">
                   <EllipsisVertical size={18} />
                 </button>
@@ -185,9 +204,10 @@ export function MemberManager({ members, query }: { members: Member[]; query: st
           <table className="hidden w-full text-left md:table">
             <thead>
               <tr className="bg-surface text-[13px] font-medium text-sub">
-                <th className="w-[320px] rounded-l-lg px-4 py-2.5 font-medium">이름</th>
-                <th className="w-[200px] font-medium">사번</th>
-                <th className="w-[200px] font-medium">비밀번호</th>
+                <th className="w-60 rounded-l-lg px-4 py-2.5 font-medium">이름</th>
+                <th className="w-65 font-medium">이메일</th>
+                <th className="w-32 font-medium">사번</th>
+                <th className="w-30 font-medium">비밀번호</th>
                 <th className="rounded-r-lg" />
               </tr>
             </thead>
@@ -203,7 +223,8 @@ export function MemberManager({ members, query }: { members: Member[]; query: st
                         <span className="text-sm font-semibold">{m.name}</span>
                       </span>
                     </td>
-                    <td className="font-num text-sm">{m.empNo}</td>
+                    <td className="font-num text-sm">{m.account}</td>
+                    <td className="font-num text-sm">{m.empNo ?? <span className="text-sub">-</span>}</td>
                     <td className="text-[13px] text-sub">{m.passwordChanged ? "변경함" : "초기 비밀번호"}</td>
                     <td className="px-4 text-right">
                       <span className="inline-flex gap-1">

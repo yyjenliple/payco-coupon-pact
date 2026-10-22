@@ -10,7 +10,7 @@ const attempts = new Map<string, Entry>();
 
 const keyOf = (loginId: string) => loginId.trim().toLowerCase();
 
-/** Minutes left on the lock, or 0 when the 사번 may try again. */
+/** Minutes left on the lock, or 0 when the account may try again. */
 export function lockedMinutes(loginId: string, now = Date.now()): number {
   const entry = attempts.get(keyOf(loginId));
   if (!entry || entry.lockedUntil <= now) return 0;

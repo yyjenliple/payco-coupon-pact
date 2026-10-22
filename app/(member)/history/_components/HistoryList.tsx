@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowRight, ChevronDown, ChevronRight, ChevronUp, ChevronsDownUp, ChevronsUpDown, LoaderCircle, Lock, StickyNote, Undo2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { saveMemoAction, withdrawAction } from "@/app/actions/common";
 import { Avatar } from "@/components/Avatar";
@@ -11,9 +12,8 @@ import { Sheet } from "@/components/Sheet";
 import { useToast } from "@/components/Toast";
 import type { Cursor } from "@/lib/data/transfers";
 import type { PersonRef } from "@/lib/domain/balance";
-import { formatKst } from "@/lib/format";
+import { formatKst, handleOf } from "@/lib/format";
 import { loadHistoryPage, type WireFilter, type WireItem } from "../actions";
-import { OnlyMeToggle } from "./HistoryFilters";
 
 const COLLAPSE_KEY = "history.memos.collapsed";
 
@@ -90,7 +90,7 @@ function PersonCell({ person, faded }: { person: PersonRef; faded: boolean }) {
     <span className={`flex w-[260px] shrink-0 items-center gap-2.5 ${faded ? "opacity-50" : ""}`}>
       <Avatar person={person} size={28} />
       <span className={`text-sm font-semibold ${faded ? "line-through" : ""}`}>{person.name}</span>
-      <span className="font-num text-xs text-sub">{person.empNo}</span>
+      <span className="font-num text-xs text-sub">{handleOf(person.account)}</span>
       {person.deleted && <Tag tone="gray">삭제됨</Tag>}
     </span>
   );
@@ -113,9 +113,9 @@ function Row({
   onEditMemo: () => void;
   onWithdraw: () => void;
 }) {
-  const mine = item.giver.id === me.id || item.receiver.id === me.id;
+  // the list only holds records the viewer is part of
   const withdrawn = !!item.withdrawnBy;
-  const canWithdraw = mine && !withdrawn;
+  const canWithdraw = !withdrawn;
   const date = formatKst(new Date(item.givenAt));
   const nameClass = `text-[15px] font-semibold ${withdrawn ? "text-sub line-through" : ""}`;
 
@@ -123,7 +123,7 @@ function Row({
     <li className="flex flex-col gap-2.5 border-b border-line py-3.5 md:px-4">
       {/* mobile */}
       <div className="flex items-center gap-2.5 md:hidden">
-        <button type="button" disabled={!mine} onClick={onOpenSheet} className="flex min-w-0 flex-1 flex-col gap-[3px] text-left">
+        <button type="button" onClick={onOpenSheet} className="flex min-w-0 flex-1 flex-col gap-[3px] text-left">
           <span className="flex flex-wrap items-center gap-1.5">
             <span className={nameClass}>{item.giver.name}</span>
             <ArrowRight size={14} className="text-sub" />
@@ -132,9 +132,9 @@ function Row({
               <Tag tone="gray">철회됨</Tag>
             ) : item.giver.id === me.id ? (
               <Tag tone="red">보냄</Tag>
-            ) : item.receiver.id === me.id ? (
+            ) : (
               <Tag tone="gray">받음</Tag>
-            ) : null}
+            )}
             {item.edited && <Tag tone="amber">수정됨</Tag>}
           </span>
           <span className="flex items-center gap-2">
@@ -143,7 +143,7 @@ function Row({
           </span>
         </button>
         {item.myMemo && <MemoToggle open={memoOpen} onClick={onToggleMemo} />}
-        {mine && <ChevronRight size={18} className="shrink-0 text-faint" aria-hidden />}
+        <ChevronRight size={18} className="shrink-0 text-faint" aria-hidden />
       </div>
 
       {/* desktop */}
@@ -156,15 +156,14 @@ function Row({
           {item.edited && <Tag tone="amber">수정됨</Tag>}
         </span>
         <span className="flex w-[180px] shrink-0 items-center justify-end gap-1">
-          {mine &&
-            (item.myMemo ? (
-              <MemoToggle open={memoOpen} onClick={onToggleMemo} label="메모" />
-            ) : (
-              <button type="button" onClick={onEditMemo} className="flex h-8 items-center gap-1 rounded-lg px-2.5 text-[13px] text-sub hover:bg-surface">
-                <StickyNote size={14} />
-                메모 추가
-              </button>
-            ))}
+          {item.myMemo ? (
+            <MemoToggle open={memoOpen} onClick={onToggleMemo} label="메모" />
+          ) : (
+            <button type="button" onClick={onEditMemo} className="flex h-8 items-center gap-1 rounded-lg px-2.5 text-[13px] text-sub hover:bg-surface">
+              <StickyNote size={14} />
+              메모 추가
+            </button>
+          )}
           {canWithdraw && (
             <button type="button" onClick={onWithdraw} className="flex h-8 items-center gap-1 rounded-lg px-2.5 text-[13px] text-red hover:bg-red-soft">
               <Undo2 size={14} />
@@ -185,13 +184,11 @@ function Row({
 
 function RecordSheet({
   item,
-  me,
   onClose,
   onSaved,
   onWithdraw,
 }: {
   item: WireItem | null;
-  me: Me;
   onClose: () => void;
   onSaved: (id: number, memo: string | null) => void;
   onWithdraw: (item: WireItem) => void;
@@ -200,7 +197,7 @@ function RecordSheet({
   const [pending, start] = useTransition();
   const toast = useToast();
   if (!item) return null;
-  const canWithdraw = !item.withdrawnBy && (item.giver.id === me.id || item.receiver.id === me.id);
+  const canWithdraw = !item.withdrawnBy;
 
   const side = (p: PersonRef, role: string) => (
     <span className="flex w-24 flex-col items-center gap-1">
@@ -235,7 +232,7 @@ function RecordSheet({
             onClick={() =>
               start(async () => {
                 const result = await saveMemoAction(item.id, body);
-                if (!result.ok) return toast.show({ message: result.error });
+                if (!result.ok) return toast.show({ message: result.error, tone: "error" });
                 onSaved(item.id, body.trim() || null);
                 onClose();
                 toast.show({ message: "메모를 저장했어요" });
@@ -263,7 +260,7 @@ function DesktopMemoEditor({ item, onClose, onSaved }: { item: WireItem; onClose
           onClick={() =>
             start(async () => {
               const result = await saveMemoAction(item.id, body);
-              if (!result.ok) return toast.show({ message: result.error });
+              if (!result.ok) return toast.show({ message: result.error, tone: "error" });
               onSaved(item.id, body.trim() || null);
               onClose();
               toast.show({ message: "메모를 저장했어요" });
@@ -283,19 +280,24 @@ function appendUnique<T extends { id: number }>(prev: T[], next: T[]): T[] {
   return [...prev, ...next.filter((i) => !seen.has(i.id))];
 }
 
-export function HistoryList({
-  me,
-  filter,
-  explicitPeriod,
-  initialItems,
-  initialCursor,
-}: {
+type HistoryListProps = {
   me: Me;
   filter: WireFilter;
   explicitPeriod: boolean;
   initialItems: WireItem[];
   initialCursor: Cursor | null;
-}) {
+};
+
+/**
+ * Activity keeps this page's state alive across navigations, so the list would keep showing the
+ * items it first loaded. Start over from the server's fresh first page on every new visit.
+ */
+export function HistoryList(props: HistoryListProps) {
+  const { bfcacheId } = useRouter();
+  return <HistoryListBody key={bfcacheId} {...props} />;
+}
+
+function HistoryListBody({ me, filter, explicitPeriod, initialItems, initialCursor }: HistoryListProps) {
   const toast = useToast();
   const [items, setItems] = useState(initialItems);
   const [cursor, setCursor] = useState(initialCursor);
@@ -331,7 +333,7 @@ export function HistoryList({
         setDone(true);
       }
     } catch {
-      toast.show({ message: "기록을 불러오지 못했어요. 다시 스크롤해 주세요" });
+      toast.show({ message: "기록을 불러오지 못했어요. 다시 스크롤해 주세요", tone: "error" });
     } finally {
       setLoading(false);
     }
@@ -357,8 +359,8 @@ export function HistoryList({
     startWithdraw(async () => {
       const result = await withdrawAction(item.id);
       setConfirmItem(null);
-      if (!result.ok) return toast.show({ message: result.error });
-      updateItem(item.id, { withdrawnBy: { id: me.id, name: me.name, empNo: "", avatarPath: null, deleted: false } });
+      if (!result.ok) return toast.show({ message: result.error, tone: "error" });
+      updateItem(item.id, { withdrawnBy: { id: me.id, name: me.name, account: "", avatarPath: null, deleted: false } });
       setSheetItem(null);
       toast.show({ message: "철회했어요" });
     });
@@ -368,7 +370,7 @@ export function HistoryList({
 
   return (
     <div className="flex flex-col">
-      <div className="flex items-center justify-between py-1 md:pb-3">
+      <div className="flex items-center py-1 md:pb-3">
         <button
           type="button"
           onClick={toggleAll}
@@ -378,9 +380,6 @@ export function HistoryList({
           {collapsedAll ? <ChevronsUpDown size={14} /> : <ChevronsDownUp size={14} />}
           {collapsedAll ? "메모 모두 펼치기" : "메모 모두 접기"}
         </button>
-        <span className="md:hidden">
-          <OnlyMeToggle variant="switch" />
-        </span>
       </div>
 
       <div className="hidden rounded-lg bg-surface px-4 py-2.5 text-[13px] font-medium text-sub md:flex">
@@ -423,7 +422,6 @@ export function HistoryList({
       <RecordSheet
         key={sheetItem?.id ?? "none"}
         item={sheetItem}
-        me={me}
         onClose={() => setSheetItem(null)}
         onSaved={(id, memo) => updateItem(id, { myMemo: memo })}
         onWithdraw={(item) => setConfirmItem(item)}

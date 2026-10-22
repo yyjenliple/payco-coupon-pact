@@ -13,15 +13,16 @@ import { eq } from "drizzle-orm";
 async function main() {
   if (process.env.DATABASE_URL) throw new Error("DATABASE_URL이 설정돼 있어요. 로컬 시드는 PGlite에만 넣어요.");
   const db = await createPgliteDb(path.join(process.cwd(), "data", "pglite"));
-  const [admin] = await db.select().from(users).where(eq(users.empNo, "admin"));
-  const existing = await db.select().from(users).where(eq(users.empNo, "10234"));
+  const [admin] = await db.select().from(users).where(eq(users.account, "admin"));
+  const existing = await db.select().from(users).where(eq(users.account, "haneul@corp.com"));
   if (existing.length) return console.log("이미 시드돼 있어요");
 
   const ids: Record<string, number> = {};
-  for (const [key, name, empNo] of [
-    ["hn", "김하늘", "10234"], ["sy", "이서연", "10087"], ["jh", "박준호", "10412"], ["mj", "최민지", "10533"],
-    ["de", "정다은", "10198"], ["ji", "한지훈", "10377"], ["sr", "오세린", "A-10601"],
-  ]) ids[key] = await createMember(db, { name, empNo });
+  for (const [key, name, account, empNo] of [
+    ["hn", "김하늘", "haneul@corp.com", "10234"], ["sy", "이서연", "seoyeon@corp.com", "10087"], ["jh", "박준호", "junho@corp.com"],
+    ["mj", "최민지", "minji@corp.com", "10533"], ["de", "정다은", "daeun@corp.com"], ["ji", "한지훈", "jihoon@corp.com", "10377"],
+    ["sr", "오세린", "serin@corp.com", "A-10601"],
+  ]) ids[key] = await createMember(db, { name, account, empNo });
 
   const at = (daysAgo: number) => new Date(Date.now() - daysAgo * 86400000);
   let d = 1;
@@ -37,7 +38,7 @@ async function main() {
   const [w] = await give("hn", "ji");
   await withdrawTransfer(db, ids.hn, w);
   for (let i = 0; i < 40; i++) await give(i % 2 ? "sy" : "ji", i % 2 ? "ji" : "sy");
-  console.log("시드 완료: 회원 7명, 비밀번호 0000");
+  console.log("시드 완료: 회원 7명(예: haneul@corp.com), 비밀번호 0000");
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

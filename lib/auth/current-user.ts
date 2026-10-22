@@ -9,7 +9,8 @@ import { readSession } from "./session";
 export type CurrentUser = {
   id: number;
   name: string;
-  empNo: string;
+  account: string;
+  empNo: string | null;
   isAdmin: boolean;
   avatarPath: string | null;
   passwordChanged: boolean;
@@ -23,6 +24,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     .select({
       id: users.id,
       name: users.name,
+      account: users.account,
       empNo: users.empNo,
       isAdmin: users.isAdmin,
       avatarPath: users.avatarPath,
@@ -37,6 +39,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   return {
     id: user.id,
     name: user.name,
+    account: user.account,
     empNo: user.empNo,
     isAdmin: user.isAdmin,
     avatarPath: user.avatarPath,

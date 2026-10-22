@@ -16,6 +16,12 @@ export function formatKst(d: Date): string {
   return `${p.y}-${pad(p.m + 1)}-${pad(p.day)} ${pad(p.h)}:${pad(p.min)}`;
 }
 
+/** "HH:MM:SS" in KST. */
+export function formatKstTime(d: Date): string {
+  const k = new Date(d.getTime() + KST_OFFSET_MS);
+  return `${pad(k.getUTCHours())}:${pad(k.getUTCMinutes())}:${pad(k.getUTCSeconds())}`;
+}
+
 export function formatKstDate(d: Date): string {
   return formatKst(d).slice(0, 10);
 }
@@ -25,21 +31,25 @@ export function kstMidnight(y: number, m: number, day: number): Date {
   return new Date(Date.UTC(y, m, day) - KST_OFFSET_MS);
 }
 
+export function startOfKstDay(now: Date): Date {
+  const p = kstParts(now);
+  return kstMidnight(p.y, p.m, p.day);
+}
+
 export function monthAgoKst(now: Date): Date {
   const p = kstParts(now);
   const lastDay = new Date(Date.UTC(p.y, p.m, 0)).getUTCDate();
   return kstMidnight(p.y, p.m - 1, Math.min(p.day, lastDay));
 }
 
-export function formatWon(count: number): string {
-  const amount = Math.abs(count * COUPON_WON).toLocaleString("ko-KR");
-  if (count > 0) return `+${amount}원`;
-  if (count < 0) return `-${amount}원`;
-  return "0원";
-}
-
 export function initialsOf(name: string): string {
   return name.length >= 2 ? name.slice(-2) : name;
+}
+
+/** Short id shown under a name: the part of the email before "@". */
+export function handleOf(account: string): string {
+  const at = account.indexOf("@");
+  return at > 0 ? account.slice(0, at) : account;
 }
 
 export function avatarColorOf(id: number): string {

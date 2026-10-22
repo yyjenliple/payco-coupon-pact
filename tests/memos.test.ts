@@ -11,9 +11,9 @@ let db: Db;
 let haneul: number, junho: number, seoyeon: number, t: number;
 beforeEach(async () => {
   db = await makeTestDb();
-  haneul = await createMember(db, { name: "김하늘", empNo: "10234" });
-  junho = await createMember(db, { name: "박준호", empNo: "10412" });
-  seoyeon = await createMember(db, { name: "이서연", empNo: "10087" });
+  haneul = await createMember(db, { name: "김하늘", account: "haneul@corp.com" });
+  junho = await createMember(db, { name: "박준호", account: "junho@corp.com" });
+  seoyeon = await createMember(db, { name: "이서연", account: "seoyeon@corp.com" });
   t = await giveCoupon(db, haneul, junho);
 });
 const memoOf = async (userId: number) =>

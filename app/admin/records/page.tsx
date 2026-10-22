@@ -11,7 +11,7 @@ import { RecordManager } from "../_components/RecordManager";
 
 export default function AdminRecordsPage({ searchParams }: PageProps<"/admin/records">) {
   return (
-    <Suspense fallback={<div className="mx-auto h-[60dvh] max-w-[1040px]" />}>
+    <Suspense fallback={<div className="mx-auto h-[60dvh] max-w-[1120px]" />}>
       <RecordsContent searchParams={searchParams} />
     </Suspense>
   );
@@ -21,18 +21,17 @@ async function RecordsContent({ searchParams }: { searchParams: PageProps<"/admi
   const admin = await requireAdmin();
   const now = new Date();
   const { filter, explicitPeriod } = parseHistoryParams(await searchParams, now);
-  const adminFilter = { ...filter, onlyMe: undefined };
   const db = await getDb();
   const [page, people, members] = await Promise.all([
-    listAdminRecords(db, admin.id, adminFilter, null),
+    listAdminRecords(db, admin.id, filter, null),
     allPeople(db),
     listMembers(db),
   ]);
 
   const filterPeople: FilterPerson[] = [...people.values()]
     .sort((a, b) => a.name.localeCompare(b.name, "ko"))
-    .map(({ id, name, empNo, avatarPath }) => ({ id, name, empNo, avatarPath }));
-  const wire: WireAdminFilter = { ...adminFilter, from: adminFilter.from?.getTime(), to: adminFilter.to?.getTime() };
+    .map(({ id, name, account, avatarPath }) => ({ id, name, account, avatarPath }));
+  const wire: WireAdminFilter = { ...filter, from: filter.from?.getTime(), to: filter.to?.getTime() };
 
   return (
     <RecordManager
@@ -41,16 +40,15 @@ async function RecordsContent({ searchParams }: { searchParams: PageProps<"/admi
       initialItems={page.items.map((i) => ({ ...i, givenAt: i.givenAt.getTime() }))}
       initialCursor={page.nextCursor}
       options={[
-        ...members.map(({ id, name, empNo }) => ({ id, name, empNo, deleted: false })),
-        ...[...people.values()].filter((p) => p.deleted).map(({ id, name, empNo }) => ({ id, name, empNo, deleted: true })),
+        ...members.map(({ id, name, account }) => ({ id, name, account, deleted: false })),
+        ...[...people.values()].filter((p) => p.deleted).map(({ id, name, account }) => ({ id, name, account, deleted: true })),
       ]}
       filters={
         <HistoryFilters
           people={filterPeople}
           defaultFrom={formatKstDate(monthAgoKst(now))}
           today={formatKstDate(now)}
-          placeholder="이름, 사번"
-          showOnlyMe={false}
+          placeholder="이름, 이메일, 사번"
         />
       }
     />

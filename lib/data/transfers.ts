@@ -4,6 +4,7 @@ import type { Db } from "@/lib/db/client";
 import { memos, transfers, users } from "@/lib/db/schema";
 import type { Edge, PersonRef } from "@/lib/domain/balance";
 import { DomainError } from "@/lib/errors";
+import { startOfKstDay } from "@/lib/format";
 import { toId } from "@/lib/ids";
 
 type TransferInput = { giverId: number; receiverId: number; givenAt: Date };
@@ -126,7 +127,6 @@ export type HistoryFilter = {
   to?: Date;
   giverId?: number;
   receiverId?: number;
-  onlyMe?: boolean;
   q?: string;
 };
 
@@ -148,6 +148,15 @@ export type HistoryItem = {
 
 export type HistoryPage<T> = { items: T[]; nextCursor: Cursor | null };
 
+/** Receivers of the standing coupons I gave since KST midnight, one entry per coupon. */
+export async function sentToday(db: Db, giverId: number, now = new Date()): Promise<number[]> {
+  const rows = await db
+    .select({ receiverId: transfers.receiverId })
+    .from(transfers)
+    .where(and(eq(transfers.giverId, giverId), gte(transfers.givenAt, startOfKstDay(now)), isNull(transfers.withdrawnAt)));
+  return rows.map((r) => r.receiverId);
+}
+
 export async function allEdges(db: Db): Promise<Edge[]> {
   const rows = await db
     .select({ giverId: transfers.giverId, receiverId: transfers.receiverId, withdrawnAt: transfers.withdrawnAt })
@@ -162,30 +171,30 @@ const withdrawer = alias(users, "withdrawer");
 const giverCols = {
   id: giver.id,
   name: giver.name,
-  empNo: giver.empNo,
+  account: giver.account,
   avatarPath: giver.avatarPath,
   deletedAt: giver.deletedAt,
 };
 const receiverCols = {
   id: receiver.id,
   name: receiver.name,
-  empNo: receiver.empNo,
+  account: receiver.account,
   avatarPath: receiver.avatarPath,
   deletedAt: receiver.deletedAt,
 };
 const withdrawerCols = {
   id: withdrawer.id,
   name: withdrawer.name,
-  empNo: withdrawer.empNo,
+  account: withdrawer.account,
   avatarPath: withdrawer.avatarPath,
   deletedAt: withdrawer.deletedAt,
 };
 
-type PersonRow = { id: number; name: string; empNo: string; avatarPath: string | null; deletedAt: Date | null };
+type PersonRow = { id: number; name: string; account: string; avatarPath: string | null; deletedAt: Date | null };
 const toPerson = (p: PersonRow): PersonRef => ({
   id: p.id,
   name: p.name,
-  empNo: p.empNo,
+  account: p.account,
   avatarPath: p.avatarPath,
   deleted: p.deletedAt !== null,
 });
@@ -214,8 +223,10 @@ function nameMatches(term: string): SQL | undefined {
   const pattern = `%${escapeLike(term)}%`;
   return or(
     ilike(giver.name, pattern),
+    ilike(giver.account, pattern),
     ilike(giver.empNo, pattern),
     ilike(receiver.name, pattern),
+    ilike(receiver.account, pattern),
     ilike(receiver.empNo, pattern),
   );
 }
@@ -228,8 +239,8 @@ function pageOf<T extends { id: number; givenAt: Date }>(rows: T[], limit: numbe
 }
 
 /**
- * Member history. Memos are joined only for the viewer, so neither the returned memo
- * nor the text search can ever see another user's memo.
+ * Member history: only records the viewer gave or received. Memos are joined only for the
+ * viewer, so neither the returned memo nor the text search can ever see another user's memo.
  */
 export async function listHistory(
   db: Db,
@@ -257,7 +268,7 @@ export async function listHistory(
     .where(
       and(
         ...baseConditions(filter, cursor),
-        filter.onlyMe ? or(eq(transfers.giverId, viewerId), eq(transfers.receiverId, viewerId)) : undefined,
+        or(eq(transfers.giverId, viewerId), eq(transfers.receiverId, viewerId)),
         term ? or(nameMatches(term), ilike(memos.body, `%${escapeLike(term)}%`)) : undefined,
       ),
     )
@@ -285,7 +296,7 @@ export type AdminRecord = Omit<HistoryItem, "myMemo">;
 export async function listAdminRecords(
   db: Db,
   adminId: number,
-  filter: Omit<HistoryFilter, "onlyMe">,
+  filter: HistoryFilter,
   cursor: Cursor | null,
   limit = 30,
 ): Promise<HistoryPage<AdminRecord>> {

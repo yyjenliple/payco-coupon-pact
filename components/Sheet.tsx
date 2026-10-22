@@ -49,7 +49,8 @@ export function Sheet({
             <X size={22} />
           </button>
         </div>
-        <div className="min-h-0 overflow-y-auto">{children}</div>
+        {/* -m/p: room for focus outlines (2px + 2px offset), which overflow-y-auto would clip */}
+        <div className="-m-1 min-h-0 overflow-y-auto p-1">{children}</div>
       </div>
     </div>
   );

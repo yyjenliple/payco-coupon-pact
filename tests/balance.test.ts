@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
-  buildBoard,
   computeNets,
+  ledgerOf,
   mySummary,
   owesOf,
   relationLabel,
@@ -15,7 +15,7 @@ const repeat = (n: number, edge: Edge) => Array.from({ length: n }, () => edge);
 
 const names: Record<number, string> = { 1: "김하늘", 2: "이서연", 3: "박준호", 4: "최민지", 5: "정다은", 6: "한지훈", 7: "오세린" };
 const people = new Map<number, PersonRef>(
-  Object.entries(names).map(([id, name]) => [Number(id), { id: Number(id), name, empNo: `E${id}`, avatarPath: null, deleted: false }]),
+  Object.entries(names).map(([id, name]) => [Number(id), { id: Number(id), name, account: `e${id}@corp.com`, avatarPath: null, deleted: false }]),
 );
 
 // Design sample: 민지 owes 서연2 지훈1 하늘1; 준호 owes 하늘2 서연1; 하늘 owes 다은1; 세린 owes 다은1
@@ -58,28 +58,21 @@ describe("computeNets / owesOf", () => {
   });
 });
 
-describe("buildBoard", () => {
-  test("sorts by total desc then name, creditors by count desc then name", () => {
-    const board = buildBoard(owesOf(computeNets(sample)), people, { scope: "all", meId: 1 });
-    expect(board.map((r) => [r.debtor.name, r.total])).toEqual([
-      ["최민지", 4],
-      ["박준호", 3],
-      ["김하늘", 1],
-      ["오세린", 1],
-    ]);
-    expect(board[0].creditors.map((c) => [c.person.name, c.count])).toEqual([
-      ["이서연", 2],
-      ["김하늘", 1],
-      ["한지훈", 1],
+describe("ledgerOf", () => {
+  test("totals per person I've traded with, most to receive first, then name", () => {
+    const ledger = ledgerOf([...sample, e(1, 5), e(1, 5), e(4, 1)], people, 1);
+    expect(ledger.map((r) => [r.person.name, r.sent, r.received, r.net])).toEqual([
+      ["박준호", 2, 0, 2],
+      ["정다은", 2, 1, 1],
+      ["최민지", 1, 1, 0],
     ]);
   });
 
-  test("scope me keeps my row and people who owe me with only me as creditor", () => {
-    const board = buildBoard(owesOf(computeNets(sample)), people, { scope: "me", meId: 1 });
-    expect(board.map((r) => [r.debtor.name, r.total, r.creditors.map((c) => c.person.name)])).toEqual([
-      ["박준호", 2, ["김하늘"]],
-      ["김하늘", 1, ["정다은"]],
-      ["최민지", 1, ["김하늘"]],
+  test("people I owe go last; withdrawn coupons don't count; strangers are left out", () => {
+    const ledger = ledgerOf([e(1, 3), e(2, 1), e(2, 1), e(1, 4, true), e(5, 6)], people, 1);
+    expect(ledger.map((r) => [r.person.name, r.sent, r.received, r.net])).toEqual([
+      ["박준호", 1, 0, 1],
+      ["이서연", 0, 2, -2],
     ]);
   });
 });

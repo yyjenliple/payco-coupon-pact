@@ -10,7 +10,7 @@ import { Field, inputClass } from "@/components/Field";
 import { useToast } from "@/components/Toast";
 import { updateNameAction, uploadAvatarAction } from "./actions";
 
-type Me = { id: number; name: string; empNo: string; avatarPath: string | null };
+type Me = { id: number; name: string; account: string; empNo: string | null; avatarPath: string | null };
 
 export function ProfileForm({ me }: { me: Me }) {
   const toast = useToast();
@@ -25,7 +25,7 @@ export function ProfileForm({ me }: { me: Me }) {
       const data = new FormData();
       data.set("avatar", file);
       const result = await uploadAvatarAction(data);
-      toast.show({ message: result.ok ? "사진을 바꿨어요" : result.error });
+      toast.show({ message: result.ok ? "사진을 바꿨어요" : result.error, tone: result.ok ? "success" : "error" });
     });
 
   return (
@@ -39,7 +39,7 @@ export function ProfileForm({ me }: { me: Me }) {
           className="relative disabled:opacity-60"
         >
           <Avatar person={me} size={104} />
-          <span className="absolute bottom-0 right-0 flex size-[34px] items-center justify-center rounded-full bg-ink text-white ring-[3px] ring-bg">
+          <span className="absolute bottom-0 right-0 flex size-8.5 items-center justify-center rounded-full bg-ink text-white ring-[3px] ring-bg">
             <Camera size={16} />
           </span>
         </button>
@@ -73,12 +73,20 @@ export function ProfileForm({ me }: { me: Me }) {
             className={inputClass}
           />
         </Field>
-        <Field label="사번 (로그인 아이디)" htmlFor="empNo">
+        <Field label="계정 (로그인 아이디)" htmlFor="account">
           <div className="relative">
-            <input id="empNo" value={me.empNo} readOnly className={`${inputClass} font-num`} />
+            <input id="account" value={me.account} readOnly className={`${inputClass} pr-10 font-num`} />
             <Lock size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-sub" />
           </div>
         </Field>
+        {me.empNo && (
+          <Field label="사번" htmlFor="empNo">
+            <div className="relative">
+              <input id="empNo" value={me.empNo} readOnly className={`${inputClass} pr-10 font-num`} />
+              <Lock size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-sub" />
+            </div>
+          </Field>
+        )}
         <Link href="/account/password" className="flex h-[52px] items-center justify-between border-y border-line px-1">
           <span className="flex items-center gap-2.5 text-[15px] font-medium">
             <KeyRound size={18} />

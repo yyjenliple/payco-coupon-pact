@@ -6,10 +6,10 @@ export async function makeTestDb(): Promise<Db> {
   return createPgliteDb();
 }
 
-export async function addMember(db: Db, input: { name: string; empNo: string }): Promise<number> {
+export async function addMember(db: Db, input: { name: string; account: string; empNo?: string }): Promise<number> {
   const [row] = await db
     .insert(users)
-    .values({ name: input.name, empNo: input.empNo, passwordHash: await hashPassword("0000") })
+    .values({ name: input.name, account: input.account, empNo: input.empNo ?? null, passwordHash: await hashPassword("0000") })
     .returning({ id: users.id });
   return row.id;
 }

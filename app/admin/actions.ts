@@ -11,12 +11,11 @@ import {
   type AdminRecord,
   type Cursor,
 } from "@/lib/data/transfers";
-import { createMember, deleteMember, updateMember } from "@/lib/data/users";
+import { createMember, deleteMember, updateMember, type MemberInput } from "@/lib/data/users";
 import { getDb } from "@/lib/db/client";
 import { DomainError } from "@/lib/errors";
 import { parseKstLocal } from "@/lib/format";
 
-type MemberInput = { name: string; empNo: string };
 type RecordInput = { giverId: number; receiverId: number; givenAt: string };
 
 async function run(fn: (adminId: number) => Promise<void>): Promise<ActionResult> {

@@ -1,11 +1,12 @@
 import { Suspense } from "react";
 import { Avatar } from "@/components/Avatar";
+import { RenderedAt } from "@/components/RenderedAt";
 import { requireMember } from "@/lib/auth/current-user";
 import { allEdges, listHistory } from "@/lib/data/transfers";
 import { allPeople } from "@/lib/data/users";
 import { getDb } from "@/lib/db/client";
 import { computeNets, mySummary, owesOf, type PersonRef } from "@/lib/domain/balance";
-import { formatKstDate, formatWon, monthAgoKst } from "@/lib/format";
+import { formatKstDate, monthAgoKst } from "@/lib/format";
 import { parseHistoryParams } from "@/lib/history-params";
 import type { WireFilter } from "./actions";
 import { HistoryFilters, type FilterPerson } from "./_components/HistoryFilters";
@@ -13,7 +14,7 @@ import { HistoryList } from "./_components/HistoryList";
 
 export default function HistoryPage({ searchParams }: PageProps<"/history">) {
   return (
-    <Suspense fallback={<div className="mx-auto h-[60dvh] max-w-[960px] px-5 pt-4 md:px-0 md:pt-10" />}>
+    <Suspense fallback={<div className="mx-auto h-[60dvh] max-w-260 px-5 pt-4 md:px-10 md:pt-10" />}>
       <HistoryContent searchParams={searchParams} />
     </Suspense>
   );
@@ -50,27 +51,23 @@ async function HistoryContent({ searchParams }: { searchParams: PageProps<"/hist
   ].filter((l) => people.has(l.id));
   const filterPeople: FilterPerson[] = [...people.values()]
     .sort((a, b) => a.name.localeCompare(b.name, "ko"))
-    .map(({ id, name, empNo, avatarPath }) => ({ id, name, empNo, avatarPath }));
+    .map(({ id, name, account, avatarPath }) => ({ id, name, account, avatarPath }));
   const wire: WireFilter = { ...filter, from: filter.from?.getTime(), to: filter.to?.getTime() };
 
   return (
-    <main className="mx-auto flex max-w-[960px] flex-col gap-5 px-5 pt-4 md:gap-7 md:px-0 md:pb-16 md:pt-10">
-      <h1 className="text-[22px] font-bold md:text-[28px]">이력</h1>
+    <main className="mx-auto flex max-w-260 flex-col gap-5 px-5 pt-4 md:gap-7 md:px-10 md:pb-16 md:pt-10">
+      <div className="flex items-baseline justify-between gap-3">
+        <h1 className="text-[22px] font-bold md:text-[28px]">이력</h1>
+        <RenderedAt at={now} />
+      </div>
 
       <section aria-label="내 식권 잔액" className="flex flex-col gap-4 rounded-2xl bg-surface p-5 md:flex-row md:items-center md:gap-10 md:px-7 md:py-6">
-        <div className="flex flex-col gap-1 md:w-[220px] md:shrink-0">
-          <span className="text-[13px] text-sub">내 식권 잔액</span>
-          <span className="text-[28px] font-bold md:text-[30px]">{formatWon(summary.net)}</span>
-        </div>
         {lines.length > 0 && (
-          <>
-            <span className="hidden h-16 w-px bg-line md:block" />
-            <ul className="flex flex-col gap-2.5 border-t border-line pt-4 md:flex-1 md:flex-row md:gap-3 md:border-0 md:pt-0">
-              {lines.map((l) => (
-                <SummaryItem key={l.id} person={people.get(l.id)!} count={l.count} owe={l.owe} />
-              ))}
-            </ul>
-          </>
+          <ul className="flex flex-col gap-2.5 border-t border-line pt-4 md:flex-1 md:flex-row md:gap-3 md:border-0 md:pt-0">
+            {lines.map((l) => (
+              <SummaryItem key={l.id} person={people.get(l.id)!} count={l.count} owe={l.owe} />
+            ))}
+          </ul>
         )}
       </section>
 

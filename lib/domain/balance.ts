@@ -3,18 +3,15 @@ export type Edge = { giverId: number; receiverId: number; withdrawn: boolean };
 export type PersonRef = {
   id: number;
   name: string;
-  empNo: string;
+  account: string;
   avatarPath: string | null;
   deleted: boolean;
 };
 
 export type Owe = { debtorId: number; creditorId: number; count: number };
 
-export type BoardRow = {
-  debtor: PersonRef;
-  total: number;
-  creditors: Array<{ person: PersonRef; count: number }>;
-};
+/** Everything I've traded with one person. net > 0: they owe me, net < 0: I owe them. */
+export type LedgerRow = { person: PersonRef; sent: number; received: number; net: number };
 
 export type RelationStatus = { kind: "receive" | "owe" | "settled" | "none"; count: number };
 
@@ -44,26 +41,21 @@ export function owesOf(nets: Map<string, number>): Owe[] {
 
 const byName = (a: PersonRef, b: PersonRef) => a.name.localeCompare(b.name, "ko");
 
-export function buildBoard(
-  owes: Owe[],
-  people: Map<number, PersonRef>,
-  opts: { scope: "all" | "me"; meId: number },
-): BoardRow[] {
-  const relevant =
-    opts.scope === "me" ? owes.filter((o) => o.debtorId === opts.meId || o.creditorId === opts.meId) : owes;
-  const rows = new Map<number, BoardRow>();
-  for (const owe of relevant) {
-    const debtor = people.get(owe.debtorId);
-    const creditor = people.get(owe.creditorId);
-    if (!debtor || !creditor) continue;
-    const row = rows.get(debtor.id) ?? { debtor, total: 0, creditors: [] };
-    row.total += owe.count;
-    row.creditors.push({ person: creditor, count: owe.count });
-    rows.set(debtor.id, row);
+/** One row per person I've traded with (withdrawn coupons excluded), most to receive first, then name. */
+export function ledgerOf(edges: Edge[], people: Map<number, PersonRef>, meId: number): LedgerRow[] {
+  const rows = new Map<number, LedgerRow>();
+  for (const edge of edges) {
+    if (edge.withdrawn) continue;
+    const otherId = edge.giverId === meId ? edge.receiverId : edge.receiverId === meId ? edge.giverId : null;
+    const person = otherId === null ? undefined : people.get(otherId);
+    if (!person) continue;
+    const row = rows.get(person.id) ?? { person, sent: 0, received: 0, net: 0 };
+    if (edge.giverId === meId) row.sent++;
+    else row.received++;
+    row.net = row.sent - row.received;
+    rows.set(person.id, row);
   }
-  const list = [...rows.values()];
-  for (const row of list) row.creditors.sort((a, b) => b.count - a.count || byName(a.person, b.person));
-  return list.sort((a, b) => b.total - a.total || byName(a.debtor, b.debtor));
+  return [...rows.values()].sort((a, b) => b.net - a.net || byName(a.person, b.person));
 }
 
 export function mySummary(owes: Owe[], meId: number) {

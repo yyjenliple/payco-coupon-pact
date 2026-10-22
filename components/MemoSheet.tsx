@@ -53,7 +53,7 @@ export function MemoSheet({ transferId, onClose }: { transferId: number | null; 
           onClick={() =>
             start(async () => {
               const result = await saveMemoAction(transferId!, body);
-              if (!result.ok) return toast.show({ message: result.error });
+              if (!result.ok) return toast.show({ message: result.error, tone: "error" });
               setBody("");
               onClose();
               toast.show({ message: "메모를 저장했어요" });

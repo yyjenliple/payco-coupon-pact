@@ -1,16 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { avatarColorOf, formatKst, formatWon, initialsOf, monthAgoKst } from "@/lib/format";
+import { avatarColorOf, formatKst, initialsOf, monthAgoKst } from "@/lib/format";
 
 describe("format helpers", () => {
   test("formatKst renders Asia/Seoul YYYY-MM-DD HH:MM", () => {
     expect(formatKst(new Date("2026-10-22T03:31:00Z"))).toBe("2026-10-22 12:31");
     expect(formatKst(new Date("2026-10-21T15:05:00Z"))).toBe("2026-10-22 00:05");
-  });
-
-  test("formatWon signs the amount", () => {
-    expect(formatWon(2)).toBe("+20,000원");
-    expect(formatWon(-1)).toBe("-10,000원");
-    expect(formatWon(0)).toBe("0원");
   });
 
   test("initialsOf takes the last two characters", () => {

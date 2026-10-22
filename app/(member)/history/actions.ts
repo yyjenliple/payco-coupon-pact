@@ -9,7 +9,6 @@ export type WireFilter = {
   to?: number;
   giverId?: number;
   receiverId?: number;
-  onlyMe?: boolean;
   q?: string;
 };
 

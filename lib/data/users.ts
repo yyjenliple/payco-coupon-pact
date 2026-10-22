@@ -7,21 +7,25 @@ import { DomainError } from "@/lib/errors";
 import { toId } from "@/lib/ids";
 
 export const INITIAL_PASSWORD = "0000";
-/** Compared against when the 사번 doesn't exist, so a miss costs as much as a wrong password. */
+/** Compared against when the account doesn't exist, so a miss costs as much as a wrong password. */
 const DUMMY_HASH = "$2b$10$//FOTwoduJeEx52MKipQOelmvJEO/qKAwp4BzE3VG3tJ8d/utW3c.";
 export const MIN_PASSWORD_LENGTH = 4;
 
 export type Member = {
   id: number;
   name: string;
-  empNo: string;
+  account: string;
+  empNo: string | null;
   avatarPath: string | null;
   passwordChanged: boolean;
 };
 
+export type MemberInput = { name: string; account: string; empNo?: string };
+
 const memberColumns = {
   id: users.id,
   name: users.name,
+  account: users.account,
   empNo: users.empNo,
   avatarPath: users.avatarPath,
   passwordChanged: users.passwordChanged,
@@ -35,13 +39,21 @@ function cleanName(name: string): string {
   return trimmed;
 }
 
-function cleanEmpNo(empNo: string): string {
-  const trimmed = empNo.trim();
-  if (!trimmed) throw new DomainError("INVALID", "사번을 입력해 주세요");
-  return trimmed;
+const normalizeAccount = (account: string) => account.trim().toLowerCase();
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function cleanAccount(account: string): string {
+  const normalized = normalizeAccount(account);
+  if (!normalized) throw new DomainError("INVALID", "이메일을 입력해 주세요");
+  if (!EMAIL.test(normalized)) throw new DomainError("INVALID", "이메일 형식으로 입력해 주세요");
+  return normalized;
 }
 
-/** Two admins adding the same 사번 at once can both pass assertEmpNoFree; the partial unique index catches the loser. */
+/** 사번 is optional: blank means none. */
+const cleanEmpNo = (empNo: string | undefined) => empNo?.trim() || null;
+
+/** Two admins adding the same account at once can both pass assertAccountFree; the partial unique index catches the loser. */
 function isUniqueViolation(error: unknown): boolean {
   for (let e = error as { code?: string; cause?: unknown } | undefined; e; e = e.cause as typeof e) {
     if (e.code === "23505") return true;
@@ -53,18 +65,17 @@ async function writeOrConflict<T>(write: () => Promise<T>): Promise<T> {
   try {
     return await write();
   } catch (error) {
-    if (isUniqueViolation(error)) throw new DomainError("CONFLICT", "이미 쓰고 있는 사번이에요");
+    if (isUniqueViolation(error)) throw new DomainError("CONFLICT", "이미 쓰고 있는 계정이에요");
     throw error;
   }
 }
 
-async function assertEmpNoFree(db: Db, empNo: string, exceptId?: number): Promise<void> {
-  if (empNo.toLowerCase() === "admin") throw new DomainError("CONFLICT", "이미 쓰고 있는 사번이에요");
+async function assertAccountFree(db: Db, account: string, exceptId?: number): Promise<void> {
   const clash = await db
     .select({ id: users.id })
     .from(users)
-    .where(and(eq(users.empNo, empNo), isNull(users.deletedAt), exceptId ? ne(users.id, exceptId) : undefined));
-  if (clash.length > 0) throw new DomainError("CONFLICT", "이미 쓰고 있는 사번이에요");
+    .where(and(eq(users.account, account), isNull(users.deletedAt), exceptId ? ne(users.id, exceptId) : undefined));
+  if (clash.length > 0) throw new DomainError("CONFLICT", "이미 쓰고 있는 계정이에요");
 }
 
 const escapeLike = (q: string) => q.replace(/[\\%_]/g, (c) => `\\${c}`);
@@ -73,7 +84,7 @@ function matches(q: string | undefined) {
   const term = q?.trim();
   if (!term) return undefined;
   const pattern = `%${escapeLike(term)}%`;
-  return or(ilike(users.name, pattern), ilike(users.empNo, pattern));
+  return or(ilike(users.name, pattern), ilike(users.account, pattern), ilike(users.empNo, pattern));
 }
 
 export async function authenticate(
@@ -84,7 +95,7 @@ export async function authenticate(
   const [user] = await db
     .select({ id: users.id, isAdmin: users.isAdmin, passwordHash: users.passwordHash })
     .from(users)
-    .where(and(eq(users.empNo, loginId.trim()), isNull(users.deletedAt)));
+    .where(and(eq(users.account, normalizeAccount(loginId)), isNull(users.deletedAt)));
   if (!user) {
     await verifyPassword(password, DUMMY_HASH);
     return null;
@@ -115,17 +126,18 @@ export async function allPeople(db: Db): Promise<Map<number, PersonRef>> {
     .from(users)
     .where(eq(users.isAdmin, false));
   return new Map(
-    rows.map((r) => [r.id, { id: r.id, name: r.name, empNo: r.empNo, avatarPath: r.avatarPath, deleted: r.deletedAt !== null }]),
+    rows.map((r) => [r.id, { id: r.id, name: r.name, account: r.account, avatarPath: r.avatarPath, deleted: r.deletedAt !== null }]),
   );
 }
 
-export async function createMember(db: Db, input: { name: string; empNo: string }): Promise<number> {
+export async function createMember(db: Db, input: MemberInput): Promise<number> {
   const name = cleanName(input.name);
+  const account = cleanAccount(input.account);
   const empNo = cleanEmpNo(input.empNo);
-  await assertEmpNoFree(db, empNo);
+  await assertAccountFree(db, account);
   const passwordHash = await hashPassword(INITIAL_PASSWORD);
   const [row] = await writeOrConflict(() =>
-    db.insert(users).values({ name, empNo, passwordHash, passwordChanged: false }).returning({ id: users.id }),
+    db.insert(users).values({ name, account, empNo, passwordHash, passwordChanged: false }).returning({ id: users.id }),
   );
   return row.id;
 }
@@ -136,13 +148,14 @@ async function getActiveMember(db: Db, id: number) {
   return user;
 }
 
-export async function updateMember(db: Db, id: number, input: { name: string; empNo: string }): Promise<void> {
+export async function updateMember(db: Db, id: number, input: MemberInput): Promise<void> {
   const user = await getActiveMember(db, id);
   if (user.isAdmin) throw new DomainError("FORBIDDEN", "관리자 계정은 바꿀 수 없어요");
   const name = cleanName(input.name);
+  const account = cleanAccount(input.account);
   const empNo = cleanEmpNo(input.empNo);
-  await assertEmpNoFree(db, empNo, id);
-  await writeOrConflict(() => db.update(users).set({ name, empNo }).where(eq(users.id, id)));
+  await assertAccountFree(db, account, id);
+  await writeOrConflict(() => db.update(users).set({ name, account, empNo }).where(eq(users.id, id)));
 }
 
 export async function deleteMember(db: Db, id: number): Promise<void> {

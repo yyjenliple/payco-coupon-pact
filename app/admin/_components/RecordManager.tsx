@@ -10,7 +10,7 @@ import { Sheet } from "@/components/Sheet";
 import { useToast } from "@/components/Toast";
 import type { Cursor } from "@/lib/data/transfers";
 import type { PersonRef } from "@/lib/domain/balance";
-import { formatKst, toKstLocal } from "@/lib/format";
+import { formatKst, handleOf, toKstLocal } from "@/lib/format";
 import {
   createRecordAction,
   deleteRecordAction,
@@ -20,7 +20,7 @@ import {
   type WireRecord,
 } from "../actions";
 
-type Option = { id: number; name: string; empNo: string; deleted: boolean };
+type Option = { id: number; name: string; account: string; deleted: boolean };
 
 function Tag({ children, tone }: { children: React.ReactNode; tone: "gray" | "amber" }) {
   return (
@@ -52,7 +52,7 @@ function PersonSelect({ id, label, value, options, onChange, compact }: { id: st
         .filter((o) => !o.deleted || o.id === value)
         .map((o) => (
           <option key={o.id} value={o.id}>
-            {o.name} ({o.empNo}{o.deleted ? ", 삭제됨" : ""})
+            {o.name} ({o.account}{o.deleted ? ", 삭제됨" : ""})
           </option>
         ))}
     </select>
@@ -117,7 +117,7 @@ function PersonCell({ person }: { person: PersonRef }) {
     <span className="flex items-center gap-2.5">
       <Avatar person={person} size={28} />
       <span className="text-sm font-semibold">{person.name}</span>
-      <span className="font-num text-xs text-sub">{person.empNo}</span>
+      <span className="font-num text-xs text-sub">{handleOf(person.account)}</span>
     </span>
   );
 }
@@ -155,7 +155,7 @@ function InlineEdit({ record, options, onDone }: { record: WireRecord; options: 
             onClick={() =>
               start(async () => {
                 const result = await updateRecordAction(record.id, draft);
-                if (!result.ok) return toast.show({ message: result.error });
+                if (!result.ok) return toast.show({ message: result.error, tone: "error" });
                 onDone();
                 toast.show({ message: "저장했어요" });
               })
@@ -237,7 +237,7 @@ export function RecordManager({
         setDone(true);
       }
     } catch {
-      toast.show({ message: "기록을 불러오지 못했어요. 다시 스크롤해 주세요" });
+      toast.show({ message: "기록을 불러오지 못했어요. 다시 스크롤해 주세요", tone: "error" });
     } finally {
       setLoading(false);
     }
@@ -255,13 +255,13 @@ export function RecordManager({
     start(async () => {
       const result = await deleteRecordAction(record.id);
       setDeleting(null);
-      if (!result.ok) return toast.show({ message: result.error });
+      if (!result.ok) return toast.show({ message: result.error, tone: "error" });
       setItems((prev) => prev.filter((i) => i.id !== record.id));
       toast.show({ message: "기록을 삭제했어요" });
     });
 
   return (
-    <main className="mx-auto flex max-w-[1040px] flex-col gap-5 px-5 pb-10 pt-4 md:gap-6 md:px-0 md:pt-10">
+    <main className="mx-auto flex max-w-[1120px] flex-col gap-5 px-5 pb-10 pt-4 md:gap-6 md:px-10 md:pt-10">
       <div className="flex items-center justify-between">
         <h1 className="flex items-end gap-2.5">
           <span className="text-[22px] font-bold md:text-[28px]">기록 관리</span>

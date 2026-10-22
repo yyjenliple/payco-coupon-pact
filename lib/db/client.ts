@@ -21,10 +21,10 @@ export async function ensureAdmin(db: Db): Promise<void> {
   const existing = await db
     .select({ id: schema.users.id })
     .from(schema.users)
-    .where(and(eq(schema.users.empNo, ADMIN_ID), isNull(schema.users.deletedAt)));
+    .where(and(eq(schema.users.account, ADMIN_ID), isNull(schema.users.deletedAt)));
   if (existing.length > 0) return;
   await db.insert(schema.users).values({
-    empNo: ADMIN_ID,
+    account: ADMIN_ID,
     name: "관리자",
     passwordHash: await hashPassword(ADMIN_INITIAL_PASSWORD),
     isAdmin: true,

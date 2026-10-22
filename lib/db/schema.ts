@@ -17,7 +17,9 @@ export const users = pgTable(
   "users",
   {
     id: serial("id").primaryKey(),
-    empNo: text("emp_no").notNull(),
+    /** Login id: lowercased company email, or `admin` for the admin. */
+    account: text("account").notNull(),
+    empNo: text("emp_no"),
     name: text("name").notNull(),
     passwordHash: text("password_hash").notNull(),
     isAdmin: boolean("is_admin").notNull().default(false),
@@ -28,7 +30,7 @@ export const users = pgTable(
     deletedAt: ts("deleted_at"),
     createdAt: ts("created_at").notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("users_emp_no_active").on(t.empNo).where(sql`${t.deletedAt} is null`)],
+  (t) => [uniqueIndex("users_account_active").on(t.account).where(sql`${t.deletedAt} is null`)],
 );
 
 export const transfers = pgTable(

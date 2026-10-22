@@ -34,7 +34,6 @@ export function parseHistoryParams(sp: SearchParams, now: Date): HistoryParams {
     to: toDay ? new Date(kstMidnight(toDay[0], toDay[1], toDay[2] + 1).getTime() - 1) : undefined,
     giverId: parseId(one(sp.giver)),
     receiverId: parseId(one(sp.receiver)),
-    onlyMe: one(sp.me) === "1",
     q: one(sp.q)?.trim() || undefined,
   };
   return { filter, explicitPeriod };

@@ -18,7 +18,7 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
   const user = await authenticate(await getDb(), loginId, password);
   if (!user) {
     recordFailure(loginId);
-    return { error: "사번이나 비밀번호가 맞지 않아요", loginId };
+    return { error: "계정이나 비밀번호가 맞지 않아요", loginId };
   }
   clearFailures(loginId);
   await writeSession(user.id);

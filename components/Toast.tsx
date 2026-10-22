@@ -1,10 +1,10 @@
 "use client";
 
-import { CircleCheck } from "lucide-react";
+import { CircleAlert, CircleCheck } from "lucide-react";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 
 type ToastAction = { label: string; onClick: () => void };
-type ToastInput = { message: string; actions?: ToastAction[] };
+type ToastInput = { message: string; tone?: "success" | "error"; actions?: ToastAction[] };
 type ToastState = ToastInput & { key: number };
 
 const ToastContext = createContext<{ show: (toast: ToastInput) => void }>({ show: () => {} });
@@ -40,7 +40,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             className="pointer-events-auto flex w-full max-w-[420px] items-center justify-between gap-3 rounded-[14px] bg-ink px-4 py-3.5 text-white shadow-lg [animation:toast-in_.2s_ease-out]"
           >
             <span className="flex items-center gap-2 text-sm font-medium">
-              <CircleCheck size={18} className="shrink-0 text-[#ff6b66]" />
+              {toast.tone === "error" ? (
+                <CircleAlert size={18} className="shrink-0 text-[#ff6b66]" />
+              ) : (
+                <CircleCheck size={18} className="shrink-0 text-[#4ade80]" />
+              )}
               {toast.message}
             </span>
             {toast.actions && (

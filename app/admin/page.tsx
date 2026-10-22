@@ -6,7 +6,7 @@ import { MemberManager } from "./_components/MemberManager";
 
 export default function AdminMembersPage({ searchParams }: PageProps<"/admin">) {
   return (
-    <Suspense fallback={<div className="mx-auto h-[60dvh] max-w-[960px]" />}>
+    <Suspense fallback={<div className="mx-auto h-[60dvh] max-w-260" />}>
       <MembersContent searchParams={searchParams} />
     </Suspense>
   );

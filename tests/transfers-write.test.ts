@@ -7,23 +7,34 @@ import {
   adminCreateTransfer,
   adminDeleteTransfer,
   adminUpdateTransfer,
+  allEdges,
   giveCoupon,
+  sentToday,
   withdrawTransfer,
 } from "@/lib/data/transfers";
+import { computeNets, owesOf, relationLabel, relationStatus } from "@/lib/domain/balance";
 import { makeTestDb } from "./helpers/db";
 
 let db: Db;
 let admin: number, haneul: number, junho: number, seoyeon: number;
 beforeEach(async () => {
   db = await makeTestDb();
-  admin = (await db.select().from(users).where(eq(users.empNo, "admin")))[0].id;
-  haneul = await createMember(db, { name: "김하늘", empNo: "10234" });
-  junho = await createMember(db, { name: "박준호", empNo: "10412" });
-  seoyeon = await createMember(db, { name: "이서연", empNo: "10087" });
+  admin = (await db.select().from(users).where(eq(users.account, "admin")))[0].id;
+  haneul = await createMember(db, { name: "김하늘", account: "haneul@corp.com" });
+  junho = await createMember(db, { name: "박준호", account: "junho@corp.com" });
+  seoyeon = await createMember(db, { name: "이서연", account: "seoyeon@corp.com" });
 });
 const get = async (id: number) => (await db.select().from(transfers).where(eq(transfers.id, id)))[0];
 
 describe("giveCoupon", () => {
+  test("sending to someone means they owe me one", async () => {
+    await giveCoupon(db, haneul, junho);
+    const nets = computeNets(await allEdges(db));
+    expect(owesOf(nets)).toEqual([{ debtorId: junho, creditorId: haneul, count: 1 }]);
+    expect(relationLabel(relationStatus(nets, haneul, junho))).toBe("1장 받을 차례");
+    expect(relationLabel(relationStatus(nets, junho, haneul))).toBe("1장 갚을 차례");
+  });
+
   test("records me as giver at now", async () => {
     const now = new Date("2026-10-22T03:31:00Z");
     const id = await giveCoupon(db, haneul, junho, now);
@@ -129,5 +140,24 @@ describe("admin transfer management", () => {
     await expect(adminCreateTransfer(db, admin, { giverId: haneul, receiverId: junho, givenAt: future })).rejects.toMatchObject({ message: "미래 시각은 넣을 수 없어요" });
     await expect(adminCreateTransfer(db, admin, { giverId: haneul, receiverId: haneul, givenAt: new Date() })).rejects.toMatchObject({ message: "준 사람과 받은 사람이 같아요" });
     await expect(adminCreateTransfer(db, admin, { giverId: admin, receiverId: haneul, givenAt: new Date() })).rejects.toMatchObject({ code: "INVALID" });
+  });
+});
+
+describe("sentToday", () => {
+  // 2026-10-22 09:30 KST
+  const now = new Date("2026-10-22T00:30:00Z");
+
+  test("lists today's (KST) standing coupons I gave, one entry per coupon", async () => {
+    await giveCoupon(db, haneul, junho, new Date("2026-10-21T14:59:59Z")); // 10-21 23:59 KST
+    await giveCoupon(db, haneul, junho, new Date("2026-10-21T15:00:00Z")); // 10-22 00:00 KST
+    await giveCoupon(db, haneul, seoyeon, now);
+    await giveCoupon(db, junho, haneul, now);
+    expect((await sentToday(db, haneul, now)).sort()).toEqual([junho, seoyeon].sort());
+  });
+
+  test("a withdrawn coupon no longer counts", async () => {
+    const id = await giveCoupon(db, haneul, junho, now);
+    await withdrawTransfer(db, haneul, id, now);
+    expect(await sentToday(db, haneul, now)).toEqual([]);
   });
 });

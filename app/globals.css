@@ -27,9 +27,11 @@ body {
   font-family: var(--font-sans);
 }
 
-:focus-visible {
-  outline: 2px solid var(--color-red);
-  outline-offset: 2px;
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-red);
+    outline-offset: 2px;
+  }
 }
 
 @keyframes sheet-up {

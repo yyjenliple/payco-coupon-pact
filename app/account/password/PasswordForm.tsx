@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useLayoutEffect, useState, useTransition } from "react";
 import { changePasswordAction } from "@/app/(member)/me/actions";
 import { Button } from "@/components/Button";
 import { Field } from "@/components/Field";
@@ -17,16 +17,31 @@ function fieldOf(message: string): keyof Errors {
   return "confirm";
 }
 
+const empty = { current: "", next: "", confirm: "" };
+
 export function PasswordForm({ backHref }: { backHref: string }) {
   const router = useRouter();
   const toast = useToast();
-  const [values, setValues] = useState({ current: "", next: "", confirm: "" });
+  const [values, setValues] = useState(empty);
   const [errors, setErrors] = useState<Errors>({});
+  const [resetKey, setResetKey] = useState(0);
   const [pending, start] = useTransition();
+
+  // Cache Components keeps this page alive (hidden) after navigating away, so
+  // wipe the passwords and per-field visibility toggles whenever it's hidden.
+  useLayoutEffect(
+    () => () => {
+      setValues(empty);
+      setErrors({});
+      setResetKey((k) => k + 1);
+    },
+    [],
+  );
 
   const field = (key: keyof Errors, label: string, help?: string, autoComplete = "new-password") => (
     <Field label={label} htmlFor={key} help={help} error={errors[key]}>
       <PasswordInput
+        key={resetKey}
         id={key}
         value={values[key]}
         autoComplete={autoComplete}
